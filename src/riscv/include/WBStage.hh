@@ -31,8 +31,8 @@ public:
 	void init() override {}
 
 	void step() override {
-		if (this->getPipeRegister("prEXE2WB-out")->isValid()) {
-			SimPacket* pkt = this->getPipeRegister("prEXE2WB-out")->pop();
+		if (this->getPipeRegister("prMEM2WB-out")->isValid()) {
+			SimPacket* pkt = this->getPipeRegister("prMEM2WB-out")->pop();
 			this->accept(top->getGlobalTick(), *pkt);
 			CLASS_INFO << "   WBStage step() pop an InstPacket @PC=" << ((InstPacket*)pkt)->pc;
 		}

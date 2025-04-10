@@ -17,39 +17,58 @@
 #include "EXEStage.hh"
 
 void EXEStage::step() {
-	// Only move forward when
-	// 1. the incoming slave port has instruction ready
-	// 2. the downstream pipeline register is available
-	Tick currTick = top->getGlobalTick();
-
-	InstPacket* inboundPacket = nullptr;
-
-	// check hazards
-	bool controlHazard = false;
-	if (this->getPipeRegister("prIF2EXE-out")->isValid()) {
-		InstPacket* instPacket = ((InstPacket*)this->getPipeRegister("prIF2EXE-out")->value());
-		controlHazard          = instPacket->isTakenBranch;
-		inboundPacket          = instPacket;
+	if (flushed) {
+		CLASS_INFO << "   EXEStage step(): Flushed, skipping this cycle";
+		this->forceStepInNextIteration();
+		MEMInstPacket = WBInstPacket = nullptr;
+		flushed                      = false;
+		return;
 	}
 
-	if (inboundPacket)
-		CLASS_INFO << "   EXEStage step() an InstPacket @PC=" << inboundPacket->pc
-		           << " controlHazard: " << (controlHazard ? "Yes" : "No");
-	else
-		CLASS_INFO << "   EXEStage step(), no inbound packet";
+	bool hazard = false;
+	if (this->getPipeRegister("prID2EXE-out")->isValid()) {
+		InstPacket* instPacket = (InstPacket*)this->getPipeRegister("prID2EXE-out")->value();
 
-	if (this->getPipeRegister("prIF2EXE-out")->isValid() && !this->getPipeRegister("prEXE2WB-in")->isStalled()) {
-		SimPacket* pkt = this->getPipeRegister("prIF2EXE-out")->pop();
-		// process tht packet regardless whether it has control hazard or not
-		this->accept(currTick, *pkt);
+		int mem_rd = MEMInstPacket ? getDestReg(MEMInstPacket->inst) : 0;
+		int wb_rd  = WBInstPacket ? getDestReg(WBInstPacket->inst) : 0;
+
+		hazard = (MEMInstPacket && checkRAW(mem_rd, instPacket->inst)) ||
+		         (WBInstPacket && checkRAW(wb_rd, instPacket->inst));
+	}
+
+	Tick currTick = top->getGlobalTick();
+
+	if (this->getPipeRegister("prID2EXE-out")->isValid()) {
+		if (!this->getPipeRegister("prEXE2MEM-in")->isStalled() && !hazard) {
+			SimPacket* pkt = this->getPipeRegister("prID2EXE-out")->pop();
+			this->accept(currTick, *pkt);
+		} else {
+			if (hazard) { CLASS_INFO << "Hazard"; }
+			if (this->getPipeRegister("prEXE2MEM-in")->isStalled())
+				CLASS_INFO << "Pipeline register prEXE2MEM-in is stalled";
+			WBInstPacket  = MEMInstPacket;
+			MEMInstPacket = nullptr;
+			this->forceStepInNextIteration();
+			CLASS_INFO
+			    << "   EXEStage step(): Waiting for prID2EXE-out to become valid or prEXE2MEM-in to unstall or Hazard";
+		}
 	}
 }
 
 void EXEStage::instPacketHandler(Tick when, SimPacket* pkt) {
-	CLASS_INFO << "   EXEStage::instPacketHandler()  has received and an InstPacket @PC=" << ((InstPacket*)pkt)->pc
-	           << " from prIF2EXE-out and push it to prEXE2WB-in";
+	CLASS_INFO << "   EXEStage::instPacketHandler(): Received InstPacket @PC=" << ((InstPacket*)pkt)->pc
+	           << " from prID2EXE-out and pushes to prEXE2MEM-in";
 
-	// push to the prEXE2WB register
-	if (!this->getPipeRegister("prEXE2WB-in")->push(pkt)) { CLASS_ERROR << "EXEStage failed to handle an InstPacket!"; }
-	WBInstPacket = (InstPacket*)pkt;
+	if (!this->getPipeRegister("prEXE2MEM-in")->push(pkt)) {
+		CLASS_ERROR << "EXEStage failed to push InstPacket to prEXE2MEM-in!";
+	}
+
+	// Shift the tracking
+	WBInstPacket  = MEMInstPacket;
+	MEMInstPacket = (InstPacket*)pkt;
+}
+
+void EXEStage::flush() {
+	flushed = true;
+	CLASS_INFO << "   EXEStage::flush(): Control hazard flush issued";
 }

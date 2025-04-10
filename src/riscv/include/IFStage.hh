@@ -22,8 +22,9 @@
 #include "ACALSim.hh"
 #include "Emulator.hh"
 #include "InstPacket.hh"
+#include "PipelineUtils.hh"
 
-class IFStage : public acalsim::CPPSimBase {
+class IFStage : public acalsim::CPPSimBase, public PipelineUtils {
 public:
 	IFStage(std::string name) : acalsim::CPPSimBase(name) {}
 	~IFStage() {}
@@ -32,11 +33,12 @@ public:
 	void step() override;
 	void cleanup() override {}
 	void instPacketHandler(Tick when, SimPacket* pkt);
-	int  getDestReg(const instr& _inst);
-	bool checkDataHazard(int _rd, const instr& _inst);
 
 private:
+	bool        memRespValid  = true;
+	InstPacket* IDInstPacket  = nullptr;
 	InstPacket* EXEInstPacket = nullptr;
+	InstPacket* MEMInstPacket = nullptr;
 	InstPacket* WBInstPacket  = nullptr;
 };
 

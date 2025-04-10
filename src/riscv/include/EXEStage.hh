@@ -21,9 +21,9 @@
 
 #include "ACALSim.hh"
 #include "InstPacket.hh"
+#include "PipelineUtils.hh"
 #include "SOC.hh"
-
-class EXEStage : public acalsim::CPPSimBase {
+class EXEStage : public acalsim::CPPSimBase, public PipelineUtils {
 public:
 	EXEStage(std::string name) : acalsim::CPPSimBase(name) {}
 	~EXEStage() {}
@@ -32,9 +32,12 @@ public:
 	void step() override;
 	void cleanup() override {}
 	void instPacketHandler(Tick when, SimPacket* pkt);
+	void flush();  // For control hazard
 
 private:
-	InstPacket* WBInstPacket = nullptr;
+	InstPacket* MEMInstPacket = nullptr;
+	InstPacket* WBInstPacket  = nullptr;
+	bool        flushed       = false;
 };
 
 #endif  // SRC_RISCV_INCLUDE_EXESTAGE_HH_

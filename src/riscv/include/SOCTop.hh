@@ -21,7 +21,9 @@
 #include "ACALSim.hh"
 #include "EXEStage.hh"
 #include "Emulator.hh"
+#include "IDStage.hh"
 #include "IFStage.hh"
+#include "MEMStage.hh"
 #include "SOC.hh"
 #include "SystemConfig.hh"
 #include "TopPipeRegisterManager.hh"
@@ -80,12 +82,16 @@ public:
 	void registerSimulators() override {
 		this->soc  = new SOC("top-level soc");
 		this->sIF  = new IFStage("IF stage model");
+		this->sID  = new IDStage("ID stage model");
 		this->sEXE = new EXEStage("EXE stage model");
+		this->sMEM = new MEMStage("MEM stage modell");
 		this->sWB  = new WBStage("WB stage model");
 
 		this->addSimulator(this->soc);
 		this->addSimulator(this->sIF);
+		this->addSimulator(this->sID);
 		this->addSimulator(this->sEXE);
+		this->addSimulator(this->sMEM);
 		this->addSimulator(this->sWB);
 
 		// Create SimPort connection between SOC(functional modeling) and sIF(timing model)
@@ -101,17 +107,29 @@ public:
 		// SimPipeRegister Setup
 		// IF ->prIF2EXE->EXE->prEXE2WB->WB
 
-		acalsim::SimPipeRegister* prIF2EXE = new acalsim::SimPipeRegister("prIF2EXE");
-		acalsim::SimPipeRegister* prEXE2WB = new acalsim::SimPipeRegister("prEXE2WB");
+		acalsim::SimPipeRegister* prIF2ID   = new acalsim::SimPipeRegister("prIF2ID");
+		acalsim::SimPipeRegister* prID2EXE  = new acalsim::SimPipeRegister("prID2EXE");
+		acalsim::SimPipeRegister* prEXE2MEM = new acalsim::SimPipeRegister("prEXE2MEM");
+		acalsim::SimPipeRegister* prMEM2WB  = new acalsim::SimPipeRegister("prMEM2WB");
 
 		this->pipeRegisterManager = new TopPipeRegisterManager("Top-Level Pipe Register Manager");
-		this->pipeRegisterManager->addPipeRegister(prIF2EXE);
-		this->pipeRegisterManager->addPipeRegister(prEXE2WB);
+		// Add to manager
+		pipeRegisterManager->addPipeRegister(prIF2ID);
+		pipeRegisterManager->addPipeRegister(prID2EXE);
+		pipeRegisterManager->addPipeRegister(prEXE2MEM);
+		pipeRegisterManager->addPipeRegister(prMEM2WB);
 
-		this->sIF->addPRMasterPort("prIF2EXE-in", prIF2EXE);
-		this->sEXE->addPRSlavePort("prIF2EXE-out", prIF2EXE);
-		this->sEXE->addPRMasterPort("prEXE2WB-in", prEXE2WB);
-		this->sWB->addPRSlavePort("prEXE2WB-out", prEXE2WB);
+		this->sIF->addPRMasterPort("prIF2ID-in", prIF2ID);
+		this->sID->addPRSlavePort("prIF2ID-out", prIF2ID);
+
+		this->sID->addPRMasterPort("prID2EXE-in", prID2EXE);
+		this->sEXE->addPRSlavePort("prID2EXE-out", prID2EXE);
+
+		this->sEXE->addPRMasterPort("prEXE2MEM-in", prEXE2MEM);
+		this->sMEM->addPRSlavePort("prEXE2MEM-out", prEXE2MEM);
+
+		this->sMEM->addPRMasterPort("prMEM2WB-in", prMEM2WB);
+		this->sWB->addPRSlavePort("prMEM2WB-out", prMEM2WB);
 	}
 
 private:
@@ -120,6 +138,8 @@ private:
 	IFStage*  sIF;
 	EXEStage* sEXE;
 	WBStage*  sWB;
+	IDStage*  sID;
+	MEMStage* sMEM;
 };
 
 #endif
