@@ -9,32 +9,26 @@ void IDStage::step() {
 		return;
 	}
 
-	bool dataHazard = false;
-	if (this->getPipeRegister("prIF2ID-out")->isValid()) {
+	acalsim::Tick currTick = top->getGlobalTick();
+	bool          hasInst  = this->getPipeRegister("prIF2ID-out")->isValid();
+	bool          hazard   = false;
+
+	if (hasInst) {
 		InstPacket* instPacket = (InstPacket*)this->getPipeRegister("prIF2ID-out")->value();
 
-		int exe_rd = EXEInstPacket ? getDestReg(EXEInstPacket->inst) : 0;
-		int mem_rd = MEMInstPacket ? getDestReg(MEMInstPacket->inst) : 0;
-		int wb_rd  = WBInstPacket ? getDestReg(WBInstPacket->inst) : 0;
+		// Use the unified hazard check
+		auto [_, idHazard, exeHazard] = hazard_check(nullptr, instPacket, EXEInstPacket, MEMInstPacket, WBInstPacket);
+		hazard                        = idHazard;
 
-		if (instPacket) {
-			dataHazard = (EXEInstPacket && checkRAW(exe_rd, instPacket->inst)) ||
-			             (MEMInstPacket && checkRAW(mem_rd, instPacket->inst)) ||
-			             (WBInstPacket && checkRAW(wb_rd, instPacket->inst));
-		}
-	}
-
-	Tick currTick = top->getGlobalTick();
-	if (this->getPipeRegister("prIF2ID-out")->isValid()) {
-		if (!dataHazard && !this->getPipeRegister("prID2EXE-in")->isStalled()) {
+		if (!hazard && !this->getPipeRegister("prID2EXE-in")->isStalled()) {
 			SimPacket* pkt = this->getPipeRegister("prIF2ID-out")->pop();
 			this->accept(currTick, *pkt);
 		} else {
-			WBInstPacket  = MEMInstPacket;
-			MEMInstPacket = EXEInstPacket;
-			EXEInstPacket = nullptr;
 			this->forceStepInNextIteration();
-			CLASS_INFO << "   IDStage step() : Data hazard detected, stalling";
+			WBInstPacket = MEMInstPacket;
+			if (!exeHazard) { MEMInstPacket = EXEInstPacket; }
+			EXEInstPacket = nullptr;
+			CLASS_INFO << "   IDStage step(): Data hazard or downstream stall";
 		}
 	}
 }

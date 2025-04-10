@@ -22,36 +22,21 @@ void IFStage::step() {
 	bool          hazard   = false;
 	if (hasInst) {
 		InstPacket* instPacket = (InstPacket*)this->getSlavePort("soc-s")->front();
-		instr       i          = instPacket->inst;
 
-		int exe_rd = EXEInstPacket ? getDestReg(EXEInstPacket->inst) : 0;
-		int mem_rd = MEMInstPacket ? getDestReg(MEMInstPacket->inst) : 0;
-		int wb_rd  = WBInstPacket ? getDestReg(WBInstPacket->inst) : 0;
+		// Use the unified hazard check
+		auto [ifHazard, idHazard, exeHazard] =
+		    hazard_check(instPacket, IDInstPacket, EXEInstPacket, MEMInstPacket, WBInstPacket);
+		hazard = ifHazard;
 
-		if (IDInstPacket) {
-			bool use_rs1 = isRs1Used(IDInstPacket->inst);
-			bool use_rs2 = isRs2Used(IDInstPacket->inst);
-
-			hazard |= (use_rs1 && checkRAW(exe_rd, IDInstPacket->inst));
-			hazard |= (use_rs2 && checkRAW(exe_rd, IDInstPacket->inst));
-			hazard |= (use_rs1 && checkRAW(mem_rd, IDInstPacket->inst));
-			hazard |= (use_rs2 && checkRAW(mem_rd, IDInstPacket->inst));
-			hazard |= (use_rs1 && checkRAW(wb_rd, IDInstPacket->inst));
-			hazard |= (use_rs2 && checkRAW(wb_rd, IDInstPacket->inst));
-		}
-	}
-
-	if (hasInst) {
 		if (!this->getPipeRegister("prIF2ID-in")->isStalled() && !hazard) {
 			SimPacket* pkt = this->getSlavePort("soc-s")->pop();
 			this->accept(currTick, *pkt);
 		} else {
-			// Pipeline tracking shift
-			WBInstPacket       = MEMInstPacket;
-			MEMInstPacket      = EXEInstPacket;
-			EXEInstPacket      = IDInstPacket;
-			this->IDInstPacket = nullptr;
 			this->forceStepInNextIteration();
+			WBInstPacket = MEMInstPacket;
+			if (!exeHazard) { MEMInstPacket = EXEInstPacket; }
+			if (!idHazard) { EXEInstPacket = IDInstPacket; }
+			this->IDInstPacket = nullptr;
 			CLASS_INFO << "   IFStage step(): Hazard or Downstream stall";
 		}
 	}

@@ -25,32 +25,24 @@ void EXEStage::step() {
 		return;
 	}
 
-	bool hazard = false;
-	if (this->getPipeRegister("prID2EXE-out")->isValid()) {
+	acalsim::Tick currTick = top->getGlobalTick();
+	bool          hasInst  = this->getPipeRegister("prID2EXE-out")->isValid();
+	bool          hazard   = false;
+
+	if (hasInst) {
 		InstPacket* instPacket = (InstPacket*)this->getPipeRegister("prID2EXE-out")->value();
 
-		int mem_rd = MEMInstPacket ? getDestReg(MEMInstPacket->inst) : 0;
-		int wb_rd  = WBInstPacket ? getDestReg(WBInstPacket->inst) : 0;
+		// Use unified hazard check
+		auto [__, ___, exeHazard] = hazard_check(nullptr, nullptr, instPacket, MEMInstPacket, WBInstPacket);
+		hazard                    = exeHazard;
 
-		hazard = (MEMInstPacket && checkRAW(mem_rd, instPacket->inst)) ||
-		         (WBInstPacket && checkRAW(wb_rd, instPacket->inst));
-	}
-
-	Tick currTick = top->getGlobalTick();
-
-	if (this->getPipeRegister("prID2EXE-out")->isValid()) {
-		if (!this->getPipeRegister("prEXE2MEM-in")->isStalled() && !hazard) {
+		if (!hazard && !this->getPipeRegister("prEXE2MEM-in")->isStalled()) {
 			SimPacket* pkt = this->getPipeRegister("prID2EXE-out")->pop();
 			this->accept(currTick, *pkt);
 		} else {
-			if (hazard) { CLASS_INFO << "Hazard"; }
-			if (this->getPipeRegister("prEXE2MEM-in")->isStalled())
-				CLASS_INFO << "Pipeline register prEXE2MEM-in is stalled";
-			WBInstPacket  = MEMInstPacket;
-			MEMInstPacket = nullptr;
 			this->forceStepInNextIteration();
-			CLASS_INFO
-			    << "   EXEStage step(): Waiting for prID2EXE-out to become valid or prEXE2MEM-in to unstall or Hazard";
+			MEMInstPacket = nullptr;
+			CLASS_INFO << "   EXEStage step(): Hazard or Downstream stall";
 		}
 	}
 }

@@ -1,6 +1,7 @@
+#include <tuple>
+
 #include "ACALSim.hh"
 #include "DataStruct.hh"
-
 #ifndef SRC_RISCV_INCLUDE_PIPELINEUTIL_HH_
 #define SRC_RISCV_INCLUDE_PIPELINEUTIL_HH_
 
@@ -162,6 +163,41 @@ protected:
 		}
 
 		return (rs1 == rd || rs2 == rd);
+	}
+	// it would be better if we can utilized the share container, but we don't have time
+	std::tuple<bool, bool, bool> hazard_check(const InstPacket* IF_packet, const InstPacket* ID_packet,
+	                                          const InstPacket* EXE_packet, const InstPacket* MEM_packet,
+	                                          const InstPacket* WB_packet) {
+		bool IF_hazard  = false;
+		bool ID_hazard  = false;
+		bool EXE_hazard = false;
+
+		int exe_rd = EXE_packet ? getDestReg(EXE_packet->inst) : 0;
+		int mem_rd = MEM_packet ? getDestReg(MEM_packet->inst) : 0;
+		int wb_rd  = WB_packet ? getDestReg(WB_packet->inst) : 0;
+
+		// IF stage hazard: ID depends on future writes
+		if (ID_packet) {
+			const instr& id_instr = ID_packet->inst;
+			if (isRs1Used(id_instr))
+				IF_hazard |= (checkRAW(exe_rd, id_instr) || checkRAW(mem_rd, id_instr) || checkRAW(wb_rd, id_instr));
+			if (isRs2Used(id_instr))
+				IF_hazard |= (checkRAW(exe_rd, id_instr) || checkRAW(mem_rd, id_instr) || checkRAW(wb_rd, id_instr));
+		}
+
+		// ID stage hazard: IF depends on future writes
+		if (IF_packet) {
+			const instr& if_instr = IF_packet->inst;
+			ID_hazard |= (checkRAW(exe_rd, if_instr) || checkRAW(mem_rd, if_instr) || checkRAW(wb_rd, if_instr));
+		}
+
+		// EXE stage hazard: ID depends on MEM/WB
+		if (ID_packet) {
+			const instr& id_instr = ID_packet->inst;
+			EXE_hazard |= (checkRAW(mem_rd, id_instr) || checkRAW(wb_rd, id_instr));
+		}
+
+		return {IF_hazard, ID_hazard, EXE_hazard};
 	}
 };
 
