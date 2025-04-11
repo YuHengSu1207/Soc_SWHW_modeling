@@ -37,7 +37,9 @@ public:
 	void instPacketHandler(acalsim::Tick when, acalsim::SimPacket* pkt);
 
 private:
-	InstPacket* WBInstPacket = nullptr;
+	int         mem_access_count   = 0;
+	int         last_mem_access_pc = -1;
+	InstPacket* WBInstPacket       = nullptr;
 };
 
 #endif  // SRC_RISCV_INCLUDE_MEMSTAGE_HH_

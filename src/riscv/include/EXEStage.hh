@@ -35,9 +35,11 @@ public:
 	void flush();  // For control hazard
 
 private:
-	InstPacket* MEMInstPacket = nullptr;
-	InstPacket* WBInstPacket  = nullptr;
-	bool        flushed       = false;
+	int         mem_access_count   = 0;
+	int         last_mem_access_pc = -1;
+	InstPacket* MEMInstPacket      = nullptr;
+	InstPacket* WBInstPacket       = nullptr;
+	bool        flushed            = false;
 };
 
 #endif  // SRC_RISCV_INCLUDE_EXESTAGE_HH_

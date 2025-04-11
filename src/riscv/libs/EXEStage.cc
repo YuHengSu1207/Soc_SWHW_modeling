@@ -28,6 +28,7 @@ void EXEStage::step() {
 	acalsim::Tick currTick = top->getGlobalTick();
 	bool          hasInst  = this->getPipeRegister("prID2EXE-out")->isValid();
 	bool          hazard   = false;
+	bool          stall_ma = false;
 
 	if (hasInst) {
 		InstPacket* instPacket = (InstPacket*)this->getPipeRegister("prID2EXE-out")->value();
@@ -36,20 +37,45 @@ void EXEStage::step() {
 		auto [__, ___, exeHazard] = hazard_check(nullptr, nullptr, instPacket, MEMInstPacket, WBInstPacket);
 		hazard                    = exeHazard;
 
-		if (!hazard && !this->getPipeRegister("prEXE2MEM-in")->isStalled()) {
-			SimPacket* pkt = this->getPipeRegister("prID2EXE-out")->pop();
-			this->accept(currTick, *pkt);
+		CLASS_INFO << " the EXE instruction @PC= " << instPacket->pc
+		           << "\n the MEM instruction @PC= " << ((MEMInstPacket) ? MEMInstPacket->pc : 9487)
+		           << "\n the WB instruction @PC= " << ((WBInstPacket) ? WBInstPacket->pc : 9487);
+
+		if (is_MemPacket(MEMInstPacket)) {
+			if (last_mem_access_pc != MEMInstPacket->pc) {
+				last_mem_access_pc = MEMInstPacket->pc;
+				mem_access_count   = 1;
+				stall_ma           = true;
+			} else {
+				if (mem_access_count < get_memory_access_time()) {
+					mem_access_count++;
+					stall_ma = true;
+				} else {
+					stall_ma = false;
+				}
+			}
+		}
+
+		if (!this->getPipeRegister("prEXE2MEM-in")->isStalled()) {
+			if (!hazard && !stall_ma) {
+				SimPacket* pkt = this->getPipeRegister("prID2EXE-out")->pop();
+				this->accept(currTick, *pkt);
+			}
 		} else {
 			this->forceStepInNextIteration();
-			MEMInstPacket = nullptr;
-			CLASS_INFO << "   EXEStage step(): Hazard or Downstream stall";
+			if (!stall_ma) {
+				CLASS_INFO << "   EXEStage step(): Hazard at EXE";
+				MEMInstPacket = nullptr;
+			} else {
+				CLASS_INFO << "   EXEStage step(): Stall Ma, pc : " << MEMInstPacket->pc;
+			}
 		}
 	}
 }
 
 void EXEStage::instPacketHandler(Tick when, SimPacket* pkt) {
-	CLASS_INFO << "   EXEStage::instPacketHandler(): Received InstPacket @PC=" << ((InstPacket*)pkt)->pc
-	           << " from prID2EXE-out and pushes to prEXE2MEM-in";
+	// CLASS_INFO << "   EXEStage::instPacketHandler(): Received InstPacket @PC=" << ((InstPacket*)pkt)->pc
+	//            << " from prID2EXE-out and pushes to prEXE2MEM-in";
 
 	if (!this->getPipeRegister("prEXE2MEM-in")->push(pkt)) {
 		CLASS_ERROR << "EXEStage failed to push InstPacket to prEXE2MEM-in!";

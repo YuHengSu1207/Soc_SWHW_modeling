@@ -163,8 +163,8 @@ void CPU::commitInstr(const instr& _i, InstPacket* instPacket) {
 		// Wait until the master port pops out the entry and retry
 		// This case, we need to store the instruction packet locally
 		pendingInstPacket = instPacket;
-		CLASS_INFO << "send " + this->instrToString(instPacket->inst.op) << "@ PC=" << instPacket->pc
-		           << ", Got backpressure";
+		/*CLASS_INFO << "send " + this->instrToString(instPacket->inst.op) << "@ PC=" << instPacket->pc
+		           << ", Got backpressure";*/
 	}
 }
 
@@ -201,7 +201,7 @@ bool CPU::memRead(const instr& _i, instr_type _op, uint32_t _addr, operand _a1, 
 	MemReadReqPacket* pkt = rc->acquire<MemReadReqPacket>(&MemReadReqPacket::renew, nullptr, _i, _op, _addr, _a1);
 	auto data = ((DataMemory*)this->getDownStream("DSDmem"))->memReadReqHandler(acalsim::top->getGlobalTick(), pkt);
 	this->rf[_i.a1.reg] = data;
-	CLASS_INFO << "handle memRead for " << this->instrToString(instPacket->inst.op) << " @ PC=" << instPacket->pc;
+	// CLASS_INFO << "handle memRead for " << this->instrToString(instPacket->inst.op) << " @ PC=" << instPacket->pc;
 	return true;
 }
 
@@ -210,7 +210,7 @@ bool CPU::memWrite(const instr& _i, instr_type _op, uint32_t _addr, uint32_t _da
 
 	MemWriteReqPacket* pkt = rc->acquire<MemWriteReqPacket>(&MemWriteReqPacket::renew, nullptr, _i, _op, _addr, _data);
 	this->getDownStream("DSDmem")->accept(acalsim::top->getGlobalTick(), *((acalsim::SimPacket*)pkt));
-	CLASS_INFO << "handle memWrite for " << this->instrToString(instPacket->inst.op) << " @ PC=" << instPacket->pc;
+	// CLASS_INFO << "handle memWrite for " << this->instrToString(instPacket->inst.op) << " @ PC=" << instPacket->pc;
 
 	return true;
 }

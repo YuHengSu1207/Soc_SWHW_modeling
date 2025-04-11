@@ -19,10 +19,12 @@ public:
 	void flush();
 
 private:
-	InstPacket* EXEInstPacket = nullptr;
-	InstPacket* MEMInstPacket = nullptr;
-	InstPacket* WBInstPacket  = nullptr;
-	bool        flushed       = false;
+	int         mem_access_count   = 0;
+	int         last_mem_access_pc = -1;
+	InstPacket* EXEInstPacket      = nullptr;
+	InstPacket* MEMInstPacket      = nullptr;
+	InstPacket* WBInstPacket       = nullptr;
+	bool        flushed            = false;
 };
 
 #endif  // SRC_RISCV_INCLUDE_IDSTAGE_HH_

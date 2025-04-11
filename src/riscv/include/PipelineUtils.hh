@@ -2,6 +2,7 @@
 
 #include "ACALSim.hh"
 #include "DataStruct.hh"
+#include "InstPacket.hh"
 #ifndef SRC_RISCV_INCLUDE_PIPELINEUTIL_HH_
 #define SRC_RISCV_INCLUDE_PIPELINEUTIL_HH_
 
@@ -199,6 +200,27 @@ protected:
 
 		return {IF_hazard, ID_hazard, EXE_hazard};
 	}
+
+	bool is_MemPacket(const InstPacket* packet) {
+		if (!packet) { return false; }
+		switch (packet->inst.op) {
+			case LB:
+			case LH:
+			case LW:
+			case LBU:
+			case LHU:
+			case SB:
+			case SH:
+			case SW: return true;
+			default: return false;
+		}
+	}
+
+	int get_memory_access_time() const { return memory_access_time; }
+	int Stage_memory_count = 0;
+
+private:
+	const int memory_access_time = 5;
 };
 
 #endif  // SRC_RISCV_INCLUDE_PIPELINEUTIL_HH_

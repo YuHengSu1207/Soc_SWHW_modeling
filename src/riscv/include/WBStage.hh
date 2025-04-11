@@ -41,8 +41,8 @@ public:
 	void cleanup() override {}
 
 	void instPacketHandler(Tick when, InstPacket* pkt) {
-		CLASS_INFO << "   WBStage::instPacketHandler(()  has received from prEXE2WB-out and recycled inst@PC="
-		           << pkt->pc;
+		/*CLASS_INFO << "   WBStage::instPacketHandler(()  has received from prEXE2WB-out and recycled inst@PC="
+		           << pkt->pc;*/
 		acalsim::top->getRecycleContainer()->recycle(pkt);
 	}
 
