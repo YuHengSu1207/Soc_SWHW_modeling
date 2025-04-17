@@ -47,18 +47,14 @@ void IDStage::step() {
 				this->forceStepInNextIteration();
 				if (!stall_ma) {
 					// Only advance stages if there are no hazards downstream
-					if (hazard) {
-						CLASS_INFO << "   IDStage step(): Hazard";
-						if (control_hazard) {
-							CLASS_INFO << "   IDStage step(): Control hazard";
-							// ID stage hazard - stall IF and ID
-						}
+					if (control_hazard || hazard) {
+						// CLASS_INFO << "   IDStage step(): Control hazard / hazard";
 						WBInstPacket  = MEMInstPacket;
 						MEMInstPacket = EXEInstPacket;
 						EXEInstPacket = nullptr;
-					} else {
-						CLASS_INFO << "   IDStage step(): STALL MA, pc :  " << MEMInstPacket->pc;
 					}
+				} else {
+					CLASS_INFO << "   IDStage step(): STALL MA, pc :  " << MEMInstPacket->pc;
 				}
 			}
 		}

@@ -33,10 +33,12 @@ public:
 	void step() override;
 	void cleanup() override {}
 	void instPacketHandler(Tick when, SimPacket* pkt);
+	void flush();
 
 private:
 	int         mem_access_count   = 0;
 	int         last_mem_access_pc = -1;
+	bool        flush_flag         = false;
 	bool        memRespValid       = true;
 	InstPacket* IDInstPacket       = nullptr;
 	InstPacket* EXEInstPacket      = nullptr;

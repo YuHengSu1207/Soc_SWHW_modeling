@@ -22,6 +22,15 @@ void IFStage::step() {
 	bool          hazard         = false;
 	bool          stall_ma       = false;
 	bool          control_hazard = false;
+
+	if (flush_flag) {
+		flush_flag    = false;
+		IDInstPacket  = nullptr;
+		EXEInstPacket = nullptr;
+		MEMInstPacket = nullptr;
+		WBInstPacket  = nullptr;
+	}
+
 	if (hasInst) {
 		InstPacket* instPacket = (InstPacket*)this->getSlavePort("soc-s")->front();
 
@@ -66,14 +75,15 @@ void IFStage::step() {
 				// either hazard or stall
 				this->forceStepInNextIteration();
 				if (!stall_ma) {
-					if (hazard) { CLASS_INFO << "   IFStage step(): Hazard at IF"; }
-					if (control_hazard) { CLASS_INFO << "   IFStage step(): Control hazard"; }
+					// if (hazard) { CLASS_INFO << "   IFStage step(): Hazard at IF"; }
+					// if (control_hazard) { CLASS_INFO << "   IFStage step(): Control hazard"; }
+
 					WBInstPacket  = MEMInstPacket;
 					MEMInstPacket = EXEInstPacket;
 					EXEInstPacket = nullptr;
 					IDInstPacket  = IDInstPacket;  // keep the IDInstPacket
 				} else {
-					CLASS_INFO << "   IFStage step(): Stall Ma, pc : " << MEMInstPacket->pc;
+					// CLASS_INFO << "   IFStage step(): Stall Ma, pc : " << MEMInstPacket->pc;
 				}
 			}
 		}
@@ -81,8 +91,8 @@ void IFStage::step() {
 }
 
 void IFStage::instPacketHandler(Tick when, SimPacket* pkt) {
-	CLASS_INFO << "   IFStage::instPacketHandler(): Received InstPacket @PC=" << ((InstPacket*)pkt)->pc
-	           << " pushing to prIF2ID-in";
+	// CLASS_INFO << "   IFStage::instPacketHandler(): Received InstPacket @PC=" << ((InstPacket*)pkt)->pc
+	//            << " pushing to prIF2ID-in";
 
 	if (!this->getPipeRegister("prIF2ID-in")->push(pkt)) { CLASS_ERROR << "IFStage failed to push InstPacket!"; }
 

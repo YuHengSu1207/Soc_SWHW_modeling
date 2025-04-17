@@ -34,7 +34,7 @@ public:
 		if (this->getPipeRegister("prMEM2WB-out")->isValid()) {
 			SimPacket* pkt = this->getPipeRegister("prMEM2WB-out")->pop();
 			this->accept(top->getGlobalTick(), *pkt);
-			CLASS_INFO << "   WBStage step() pop an InstPacket @PC=" << ((InstPacket*)pkt)->pc;
+			// CLASS_INFO << "   WBStage step() pop an InstPacket @PC=" << ((InstPacket*)pkt)->pc;
 		}
 	}
 

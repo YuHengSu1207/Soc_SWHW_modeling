@@ -46,7 +46,7 @@ void EXEStage::step() {
 					stall_ma = false;
 				}
 			}
-			CLASS_INFO << "  EXEStage step():  Memory is " << ((stall_ma) ? "stalled" : "not stalled");
+			// CLASS_INFO << "  EXEStage step():  Memory is " << ((stall_ma) ? "stalled" : "not stalled");
 		}
 
 		if (!this->getPipeRegister("prEXE2MEM-in")->isStalled()) {
@@ -55,15 +55,15 @@ void EXEStage::step() {
 				this->accept(currTick, *pkt);
 			} else {
 				this->forceStepInNextIteration();
-				CLASS_INFO << "   EXEStage step(): Stall Ma, pc : " << MEMInstPacket->pc;
+				// CLASS_INFO << "   EXEStage step(): Stall Ma, pc : " << MEMInstPacket->pc;
 			}
 		}
 	}
 }
 
 void EXEStage::instPacketHandler(Tick when, SimPacket* pkt) {
-	CLASS_INFO << "   EXEStage::instPacketHandler(): Received InstPacket @PC=" << ((InstPacket*)pkt)->pc
-	           << " from prID2EXE-out and pushes to prEXE2MEM-in";
+	// CLASS_INFO << "   EXEStage::instPacketHandler(): Received InstPacket @PC=" << ((InstPacket*)pkt)->pc
+	//            << " from prID2EXE-out and pushes to prEXE2MEM-in";
 
 	if (!this->getPipeRegister("prEXE2MEM-in")->push(pkt)) {
 		CLASS_ERROR << "EXEStage failed to push InstPacket to prEXE2MEM-in!";
