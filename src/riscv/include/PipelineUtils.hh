@@ -282,7 +282,7 @@ protected:
 	int Stage_memory_count = 0;
 
 private:
-	const int memory_access_time = 5;
+	const int memory_access_time = 1000;  // this should be remove
 };
 
 #endif  // SRC_RISCV_INCLUDE_PIPELINEUTIL_HH_

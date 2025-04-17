@@ -1,0 +1,14 @@
+{
+  "Emulator": {
+    "asm_file_path": "soc/asm/load_store_simple.txt",
+    "memory_size": 65536,
+    "text_offset": 0,
+    "data_offset": 8192,
+    "max_label_count": 128,
+    "max_src_len": 1048576
+  },
+  "SOC": {
+    "memory_read_latency": 5,
+    "memory_write_latency": 1
+  }
+}

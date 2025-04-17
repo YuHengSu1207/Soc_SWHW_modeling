@@ -53,7 +53,7 @@ endif(NOT Torch_FOUND)
 
 # CMake options
 set(CMAKE_VERBOSE_MAKEFILE OFF)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 # Third-party options
@@ -64,3 +64,4 @@ add_subdirectory(${LIB_DIR})
 add_subdirectory(${SRC_DIR})
 add_subdirectory(${THIRD_PARTY_DIR})
 add_subdirectory(${TEST_DIR})
+add_subdirectory(soc)
