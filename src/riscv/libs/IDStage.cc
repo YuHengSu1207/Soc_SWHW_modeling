@@ -1,29 +1,28 @@
 #include "IDStage.hh"
 
 void IDStage::step() {
-	if (flushed) {
-		this->flush();
-		CLASS_INFO << "   IDStage step() : Flushed, skipping execution";
-		this->forceStepInNextIteration();
-		flushed = false;  // Only flush for one cycle
-		return;
-	}
-
-	acalsim::Tick currTick = top->getGlobalTick();
-	bool          hasInst  = this->getPipeRegister("prIF2ID-out")->isValid();
-	bool          hazard   = false;
-	bool          stall_ma = false;
+	acalsim::Tick currTick       = top->getGlobalTick();
+	bool          hasInst        = this->getPipeRegister("prIF2ID-out")->isValid();
+	bool          hazard         = false;
+	bool          stall_ma       = false;
+	bool          control_hazard = false;
 	if (hasInst) {
 		InstPacket* instPacket = (InstPacket*)this->getPipeRegister("prIF2ID-out")->value();
 
 		// Use the unified hazard check
 		auto [_, idHazard, exeHazard] = hazard_check(nullptr, instPacket, EXEInstPacket, MEMInstPacket, WBInstPacket);
-		hazard                        = idHazard;
+		hazard                        = idHazard || exeHazard;
 
 		CLASS_INFO << "IDstage : the ID instruction @PC=" << instPacket->pc
+		           << " instruction : " << instrToString(instPacket->inst.op)
 		           << "\n the EXE instruction @PC= " << ((EXEInstPacket) ? EXEInstPacket->pc : 9487)
+		           << " instruction : " << ((EXEInstPacket) ? instrToString(EXEInstPacket->inst.op) : "nop")
 		           << "\n the MEM instruction @PC= " << ((MEMInstPacket) ? MEMInstPacket->pc : 9487)
-		           << "\n the WB instruction @PC= " << ((WBInstPacket) ? WBInstPacket->pc : 9487);
+		           << " instruction : " << ((MEMInstPacket) ? instrToString(MEMInstPacket->inst.op) : "nop")
+		           << "\n the WB instruction @PC= " << ((WBInstPacket) ? WBInstPacket->pc : 9487)
+		           << " instruction : " << ((WBInstPacket) ? instrToString(WBInstPacket->inst.op) : "nop");
+
+		if (EXEInstPacket && EXEInstPacket->isTakenBranch) { control_hazard = true; }
 
 		if (is_MemPacket(MEMInstPacket)) {
 			if (last_mem_access_pc != MEMInstPacket->pc) {
@@ -48,23 +47,18 @@ void IDStage::step() {
 				this->forceStepInNextIteration();
 				if (!stall_ma) {
 					// Only advance stages if there are no hazards downstream
-					if (exeHazard) {
-						CLASS_INFO << "   IDStage step(): Hazard at EXE";
-						// EXE stage hazard - stall IF, ID, EXE
-						WBInstPacket  = MEMInstPacket;
-						MEMInstPacket = nullptr;  // EXE can't advance to MEM
-						                          // EXE and ID stay as they are
-					} else if (idHazard) {
-						CLASS_INFO << "   IDStage step(): Hazard at ID";
-						// ID stage hazard - stall IF and ID
+					if (hazard) {
+						CLASS_INFO << "   IDStage step(): Hazard";
+						if (control_hazard) {
+							CLASS_INFO << "   IDStage step(): Control hazard";
+							// ID stage hazard - stall IF and ID
+						}
 						WBInstPacket  = MEMInstPacket;
 						MEMInstPacket = EXEInstPacket;
-						EXEInstPacket = nullptr;  // ID can't advance to EXE
-						                          // ID stays as it is
+						EXEInstPacket = nullptr;
+					} else {
+						CLASS_INFO << "   IDStage step(): STALL MA, pc :  " << MEMInstPacket->pc;
 					}
-					CLASS_INFO << "   IDStage step(): Data hazard";
-				} else {
-					CLASS_INFO << "   IDStage step(): STALL MA, pc :  " << MEMInstPacket->pc;
 				}
 			}
 		}
@@ -81,12 +75,4 @@ void IDStage::instPacketHandler(acalsim::Tick when, acalsim::SimPacket* pkt) {
 	WBInstPacket  = MEMInstPacket;
 	MEMInstPacket = EXEInstPacket;
 	EXEInstPacket = (InstPacket*)pkt;
-}
-
-void IDStage::flush() {
-	CLASS_INFO << "   IDStage flush() called: clearing pipeline state";
-	EXEInstPacket = nullptr;
-	MEMInstPacket = nullptr;
-	WBInstPacket  = nullptr;
-	flushed       = true;
 }

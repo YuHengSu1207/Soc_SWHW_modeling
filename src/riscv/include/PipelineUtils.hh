@@ -8,6 +8,68 @@
 
 class PipelineUtils {
 protected:
+	std::string instrToString(instr_type _op) const {
+		switch (_op) {
+			case UNIMPL: return "UNIMPL";
+
+			// R-type
+			case ADD: return "ADD";
+			case AND: return "AND";
+			case OR: return "OR";
+			case XOR: return "XOR";
+			case SUB: return "SUB";
+			case SLL: return "SLL";
+			case SRL: return "SRL";
+			case SRA: return "SRA";
+			case SLT: return "SLT";
+			case SLTU: return "SLTU";
+
+			// I-type
+			case ADDI: return "ADDI";
+			case ANDI: return "ANDI";
+			case ORI: return "ORI";
+			case XORI: return "XORI";
+			case SLLI: return "SLLI";
+			case SRLI: return "SRLI";
+			case SRAI: return "SRAI";
+			case SLTI: return "SLTI";
+			case SLTIU: return "SLTIU";
+
+			// Load
+			case LB: return "LB";
+			case LBU: return "LBU";
+			case LH: return "LH";
+			case LHU: return "LHU";
+			case LW: return "LW";
+
+			// Store
+			case SB: return "SB";
+			case SH: return "SH";
+			case SW: return "SW";
+
+			// Branch
+			case BEQ: return "BEQ";
+			case BNE: return "BNE";
+			case BGE: return "BGE";
+			case BGEU: return "BGEU";
+			case BLT: return "BLT";
+			case BLTU: return "BLTU";
+
+			// Jump
+			case JAL: return "JAL";
+			case JALR: return "JALR";
+
+			// Upper / Immediate
+			case AUIPC: return "AUIPC";
+			case LUI: return "LUI";
+
+			// Special
+			case HCF: return "HCF";
+
+			default: return "UNKNOWN";
+		}
+	}
+
 	int getDestReg(const instr& _inst) {
 		switch (_inst.op) {
 			case ADD:
@@ -177,25 +239,25 @@ protected:
 		int mem_rd = MEM_packet ? getDestReg(MEM_packet->inst) : 0;
 		int wb_rd  = WB_packet ? getDestReg(WB_packet->inst) : 0;
 
-		// IF stage hazard: ID depends on future writes
+		// --- Chisel-like hazard detection (ID-stage only) ---
 		if (ID_packet) {
 			const instr& id_instr = ID_packet->inst;
-			if (isRs1Used(id_instr))
-				IF_hazard |= (checkRAW(exe_rd, id_instr) || checkRAW(mem_rd, id_instr) || checkRAW(wb_rd, id_instr));
-			if (isRs2Used(id_instr))
-				IF_hazard |= (checkRAW(exe_rd, id_instr) || checkRAW(mem_rd, id_instr) || checkRAW(wb_rd, id_instr));
-		}
 
-		// ID stage hazard: IF depends on future writes
-		if (IF_packet) {
-			const instr& if_instr = IF_packet->inst;
-			ID_hazard |= (checkRAW(exe_rd, if_instr) || checkRAW(mem_rd, if_instr) || checkRAW(wb_rd, if_instr));
-		}
+			// Check ID dependencies (RAW hazards)
+			bool depends_on_EXE = (isRs1Used(id_instr) && checkRAW(exe_rd, id_instr)) ||
+			                      (isRs2Used(id_instr) && checkRAW(exe_rd, id_instr));
+			bool depends_on_MEM = (isRs1Used(id_instr) && checkRAW(mem_rd, id_instr)) ||
+			                      (isRs2Used(id_instr) && checkRAW(mem_rd, id_instr));
+			bool depends_on_WB = (isRs1Used(id_instr) && checkRAW(wb_rd, id_instr)) ||
+			                     (isRs2Used(id_instr) && checkRAW(wb_rd, id_instr));
 
-		// EXE stage hazard: ID depends on MEM/WB
-		if (ID_packet) {
-			const instr& id_instr = ID_packet->inst;
-			EXE_hazard |= (checkRAW(mem_rd, id_instr) || checkRAW(wb_rd, id_instr));
+			// --- Chisel-style stall logic ---
+			// Any hazard (EXE/MEM/WB) stalls IF, ID, and EXE
+			if (depends_on_EXE || depends_on_MEM || depends_on_WB) {
+				IF_hazard  = true;  // Stall IF
+				ID_hazard  = true;  // Stall ID
+				EXE_hazard = true;  // Stall EXE (like Chisel's Stall_EXE_ID_DH, Stall_MEM_ID_DH, etc.)
+			}
 		}
 
 		return {IF_hazard, ID_hazard, EXE_hazard};

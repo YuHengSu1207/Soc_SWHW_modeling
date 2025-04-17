@@ -17,29 +17,21 @@
 #include "EXEStage.hh"
 
 void EXEStage::step() {
-	if (flushed) {
-		CLASS_INFO << "   EXEStage step(): Flushed, skipping this cycle";
-		this->forceStepInNextIteration();
-		MEMInstPacket = WBInstPacket = nullptr;
-		flushed                      = false;
-		return;
-	}
-
-	acalsim::Tick currTick = top->getGlobalTick();
-	bool          hasInst  = this->getPipeRegister("prID2EXE-out")->isValid();
-	bool          hazard   = false;
-	bool          stall_ma = false;
-
+	acalsim::Tick currTick       = top->getGlobalTick();
+	bool          hasInst        = this->getPipeRegister("prID2EXE-out")->isValid();
+	bool          stall_ma       = false;
+	bool          control_hazard = false;
 	if (hasInst) {
 		InstPacket* instPacket = (InstPacket*)this->getPipeRegister("prID2EXE-out")->value();
 
-		// Use unified hazard check
-		auto [__, ___, exeHazard] = hazard_check(nullptr, nullptr, instPacket, MEMInstPacket, WBInstPacket);
-		hazard                    = exeHazard;
+		control_hazard = instPacket->isTakenBranch;
 
 		CLASS_INFO << " the EXE instruction @PC= " << instPacket->pc
+		           << " instruction : " << instrToString(instPacket->inst.op)
 		           << "\n the MEM instruction @PC= " << ((MEMInstPacket) ? MEMInstPacket->pc : 9487)
-		           << "\n the WB instruction @PC= " << ((WBInstPacket) ? WBInstPacket->pc : 9487);
+		           << " instruction : " << ((MEMInstPacket) ? instrToString(MEMInstPacket->inst.op) : "nop")
+		           << "\n the WB instruction @PC= " << ((WBInstPacket) ? WBInstPacket->pc : 9487)
+		           << " instruction : " << ((WBInstPacket) ? instrToString(WBInstPacket->inst.op) : "nop");
 
 		if (is_MemPacket(MEMInstPacket)) {
 			if (last_mem_access_pc != MEMInstPacket->pc) {
@@ -54,19 +46,15 @@ void EXEStage::step() {
 					stall_ma = false;
 				}
 			}
+			CLASS_INFO << "  EXEStage step():  Memory is " << ((stall_ma) ? "stalled" : "not stalled");
 		}
 
 		if (!this->getPipeRegister("prEXE2MEM-in")->isStalled()) {
-			if (!hazard && !stall_ma) {
+			if (!stall_ma) {
 				SimPacket* pkt = this->getPipeRegister("prID2EXE-out")->pop();
 				this->accept(currTick, *pkt);
-			}
-		} else {
-			this->forceStepInNextIteration();
-			if (!stall_ma) {
-				CLASS_INFO << "   EXEStage step(): Hazard at EXE";
-				MEMInstPacket = nullptr;
 			} else {
+				this->forceStepInNextIteration();
 				CLASS_INFO << "   EXEStage step(): Stall Ma, pc : " << MEMInstPacket->pc;
 			}
 		}
@@ -74,8 +62,8 @@ void EXEStage::step() {
 }
 
 void EXEStage::instPacketHandler(Tick when, SimPacket* pkt) {
-	// CLASS_INFO << "   EXEStage::instPacketHandler(): Received InstPacket @PC=" << ((InstPacket*)pkt)->pc
-	//            << " from prID2EXE-out and pushes to prEXE2MEM-in";
+	CLASS_INFO << "   EXEStage::instPacketHandler(): Received InstPacket @PC=" << ((InstPacket*)pkt)->pc
+	           << " from prID2EXE-out and pushes to prEXE2MEM-in";
 
 	if (!this->getPipeRegister("prEXE2MEM-in")->push(pkt)) {
 		CLASS_ERROR << "EXEStage failed to push InstPacket to prEXE2MEM-in!";
@@ -84,9 +72,4 @@ void EXEStage::instPacketHandler(Tick when, SimPacket* pkt) {
 	// Shift the tracking
 	WBInstPacket  = MEMInstPacket;
 	MEMInstPacket = (InstPacket*)pkt;
-}
-
-void EXEStage::flush() {
-	flushed = true;
-	CLASS_INFO << "   EXEStage::flush(): Control hazard flush issued";
 }

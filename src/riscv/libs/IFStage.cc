@@ -17,23 +17,29 @@
 #include "IFStage.hh"
 
 void IFStage::step() {
-	acalsim::Tick currTick = top->getGlobalTick();
-	bool          hasInst  = this->getSlavePort("soc-s")->isPopValid();
-	bool          hazard   = false;
-	bool          stall_ma = false;
+	acalsim::Tick currTick       = top->getGlobalTick();
+	bool          hasInst        = this->getSlavePort("soc-s")->isPopValid();
+	bool          hazard         = false;
+	bool          stall_ma       = false;
+	bool          control_hazard = false;
 	if (hasInst) {
 		InstPacket* instPacket = (InstPacket*)this->getSlavePort("soc-s")->front();
 
 		// Use the unified hazard check
 		auto [ifHazard, idHazard, exeHazard] =
 		    hazard_check(instPacket, IDInstPacket, EXEInstPacket, MEMInstPacket, WBInstPacket);
-		hazard = ifHazard;
+		hazard = ifHazard || idHazard || exeHazard;
 
 		CLASS_INFO << "IFstage : the IF instruction @PC=" << instPacket->pc
+		           << " instruction : " << instrToString(instPacket->inst.op)
 		           << "\n the ID instruction @PC= " << ((IDInstPacket) ? IDInstPacket->pc : 9487)
+		           << " instruction : " << ((IDInstPacket) ? instrToString(IDInstPacket->inst.op) : "nop")
 		           << "\n the EXE instruction @PC= " << ((EXEInstPacket) ? EXEInstPacket->pc : 9487)
+		           << " instruction : " << ((EXEInstPacket) ? instrToString(EXEInstPacket->inst.op) : "nop")
 		           << "\n the MEM instruction @PC= " << ((MEMInstPacket) ? MEMInstPacket->pc : 9487)
-		           << "\n the WB instruction @PC= " << ((WBInstPacket) ? WBInstPacket->pc : 9487);
+		           << " instruction : " << ((MEMInstPacket) ? instrToString(MEMInstPacket->inst.op) : "nop")
+		           << "\n the WB instruction @PC= " << ((WBInstPacket) ? WBInstPacket->pc : 9487)
+		           << " instruction : " << ((WBInstPacket) ? instrToString(WBInstPacket->inst.op) : "nop");
 
 		if (is_MemPacket(MEMInstPacket)) {
 			if (last_mem_access_pc != MEMInstPacket->pc) {
@@ -50,36 +56,22 @@ void IFStage::step() {
 			}
 		}
 
+		if (EXEInstPacket && EXEInstPacket->isTakenBranch) { control_hazard = true; }
+
 		if (!this->getPipeRegister("prIF2ID-in")->isStalled()) {
-			if (!hazard && !stall_ma) {
+			if (!hazard && !stall_ma && !control_hazard) {
 				SimPacket* pkt = this->getSlavePort("soc-s")->pop();
 				this->accept(currTick, *pkt);
 			} else {
 				// either hazard or stall
 				this->forceStepInNextIteration();
 				if (!stall_ma) {
-					// Only advance stages if there are no hazards downstream
-					if (!exeHazard && !idHazard) {
-						CLASS_INFO << "   IFStage step(): Hazard at IF";
-						// Normal pipeline flow
-						WBInstPacket  = MEMInstPacket;
-						MEMInstPacket = EXEInstPacket;
-						EXEInstPacket = IDInstPacket;
-						IDInstPacket  = nullptr;
-					} else if (exeHazard) {
-						CLASS_INFO << "   IFStage step(): Hazard at EXE";
-						// EXE stage hazard - stall IF, ID, EXE
-						WBInstPacket  = MEMInstPacket;
-						MEMInstPacket = nullptr;  // EXE can't advance to MEM
-						                          // EXE and ID stay as they are
-					} else if (idHazard) {
-						CLASS_INFO << "   IFStage step(): Hazard at ID";
-						// ID stage hazard - stall IF and ID
-						WBInstPacket  = MEMInstPacket;
-						MEMInstPacket = EXEInstPacket;
-						EXEInstPacket = nullptr;  // ID can't advance to EXE
-						                          // ID stays as it is
-					}
+					if (hazard) { CLASS_INFO << "   IFStage step(): Hazard at IF"; }
+					if (control_hazard) { CLASS_INFO << "   IFStage step(): Control hazard"; }
+					WBInstPacket  = MEMInstPacket;
+					MEMInstPacket = EXEInstPacket;
+					EXEInstPacket = nullptr;
+					IDInstPacket  = IDInstPacket;  // keep the IDInstPacket
 				} else {
 					CLASS_INFO << "   IFStage step(): Stall Ma, pc : " << MEMInstPacket->pc;
 				}

@@ -16,7 +16,6 @@ public:
 	void step() override;
 	void cleanup() override {}
 	void instPacketHandler(acalsim::Tick when, acalsim::SimPacket* pkt);
-	void flush();
 
 private:
 	int         mem_access_count   = 0;
@@ -24,7 +23,6 @@ private:
 	InstPacket* EXEInstPacket      = nullptr;
 	InstPacket* MEMInstPacket      = nullptr;
 	InstPacket* WBInstPacket       = nullptr;
-	bool        flushed            = false;
 };
 
 #endif  // SRC_RISCV_INCLUDE_IDSTAGE_HH_

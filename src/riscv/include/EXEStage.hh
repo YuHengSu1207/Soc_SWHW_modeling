@@ -32,14 +32,12 @@ public:
 	void step() override;
 	void cleanup() override {}
 	void instPacketHandler(Tick when, SimPacket* pkt);
-	void flush();  // For control hazard
 
 private:
 	int         mem_access_count   = 0;
 	int         last_mem_access_pc = -1;
 	InstPacket* MEMInstPacket      = nullptr;
 	InstPacket* WBInstPacket       = nullptr;
-	bool        flushed            = false;
 };
 
 #endif  // SRC_RISCV_INCLUDE_EXESTAGE_HH_
