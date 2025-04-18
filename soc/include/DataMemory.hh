@@ -22,7 +22,7 @@
 #include "ACALSim.hh"
 #include "BaseMemory.hh"
 #include "DataStruct.hh"
-#include "packet/MemPacket.hh"
+#include "packet/XBarPacket.hh"
 
 /**
  * @class DataMemory
@@ -68,7 +68,7 @@ public:
 	 * @param _memReqPkt Pointer to the memory read request packet
 	 * @details Processes incoming read requests and generates appropriate responses
 	 */
-	void memReadReqHandler(acalsim::Tick _when, MemReadReqPacket* _memReqPkt);
+	void memReadReqHandler(acalsim::Tick _when, XBarMemReadReqPayload* _memReqPkt);
 
 	/**
 	 * @brief Handles memory write request packets
@@ -76,7 +76,7 @@ public:
 	 * @param _memReqPkt Pointer to the memory write request packet
 	 * @details Processes incoming write requests and updates memory contents
 	 */
-	void memWriteReqHandler(acalsim::Tick _when, MemWriteReqPacket* _memReqPkt);
+	void memWriteReqHandler(acalsim::Tick _when, XBarMemWriteReqPayload* _memReqPkt);
 };
 
 #endif

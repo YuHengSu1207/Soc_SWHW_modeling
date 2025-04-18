@@ -38,17 +38,8 @@ void BusMemReadReqPacket::visit(acalsim::Tick _when, acalsim::SimBase& _simulato
 		auto                                 _addr       = readPackets[0]->getAddr();
 		if (_addr >= 0xf000 && _addr <= 0xf03f) {
 			// MMIO
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(this->getTransactionID()),
-			    /* name */ "(Bus) CPU program dma (read req)",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(this->getTransactionID())));
 			bus->memReadDMA(acalsim::top->getGlobalTick() + 1, (acalsim::SimPacket*)(this));
 		} else {
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(this->getTransactionID()), /* name */ "Bus read to DM acq",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(this->getTransactionID())));
 			bus->memReadDM(acalsim::top->getGlobalTick() + 1, (acalsim::SimPacket*)(this));
 		}
 	} else {
@@ -61,42 +52,11 @@ void BusMemWriteReqPacket::visit(acalsim::Tick _when, acalsim::SimBase& _simulat
 		const std::vector<MemWriteReqPacket*> writePackets = this->getMemWriteReqPkt();
 		auto                                  _addr        = writePackets[0]->getAddr();
 		if (_addr >= 0xf000 && _addr <= 0xf03f) {
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(this->getTransactionID()),
-			    /* name */ "(Bus) CPU program dma (write req)",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(this->getTransactionID())));
 			bus->memWriteDMA(acalsim::top->getGlobalTick() + 1, (acalsim::SimPacket*)(this));
 		} else {
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(this->getTransactionID()), /* name */ "Bus write to DM acq",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(this->getTransactionID())));
 			bus->memWriteDM(acalsim::top->getGlobalTick() + 1, (acalsim::SimPacket*)(this));
 		}
 	} else {
 		CLASS_ERROR << "Unrecongized simulator";
 	}
-}
-
-void BusMemReadRespPacket::visit(acalsim::Tick _when, acalsim::SimModule& _module) {
-	CLASS_ERROR << "Not implemented!";
-}
-
-void BusMemWriteRespPacket::visit(acalsim::Tick _when, acalsim::SimModule& _module) {
-	CLASS_ERROR << "Not implemented!";
-}
-
-void BusMemReadReqPacket::visit(acalsim::Tick _when, acalsim::SimModule& _module) { CLASS_ERROR << "Not implemented!"; }
-
-void BusMemWriteReqPacket::visit(acalsim::Tick _when, acalsim::SimModule& _module) {
-	CLASS_ERROR << "Not implemented!";
-}
-
-void BusMemReadRespPacket::visit(acalsim::Tick _when, acalsim::SimBase& _simulator) {
-	CLASS_ERROR << "Not implemented!";
-}
-
-void BusMemWriteRespPacket::visit(acalsim::Tick _when, acalsim::SimBase& _simulator) {
-	CLASS_ERROR << "Not implemented!";
 }

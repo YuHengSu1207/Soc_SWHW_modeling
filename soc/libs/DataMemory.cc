@@ -16,13 +16,12 @@
 
 #include "DataMemory.hh"
 
-void DataMemory::memReadReqHandler(acalsim::Tick _when, MemReadReqPacket* _memReqPkt) {
+void DataMemory::memReadReqHandler(acalsim::Tick _when, XBarMemReadReqPayload* _memReqPkt) {
 	// LABELED_INFO(this->getName()) << "DataMemory doing mem read for tid " << _memReqPkt->getTid();
-	instr      i        = _memReqPkt->getInstr();
-	instr_type op       = _memReqPkt->getOP();
-	uint32_t   addr     = _memReqPkt->getAddr();
-	operand    a1       = _memReqPkt->getA1();
-	auto       callback = _memReqPkt->getCallback();
+	instr      i    = _memReqPkt->getInstr();
+	instr_type op   = _memReqPkt->getOP();
+	uint32_t   addr = _memReqPkt->getAddr();
+	operand    a1   = _memReqPkt->getA1();
 
 	size_t   bytes = 0;
 	uint32_t ret   = 0;
@@ -45,20 +44,19 @@ void DataMemory::memReadReqHandler(acalsim::Tick _when, MemReadReqPacket* _memRe
 		case LW: ret = *(uint32_t*)data; break;
 	}
 
-	auto               rc         = acalsim::top->getRecycleContainer();
-	MemReadRespPacket* memRespPkt = rc->acquire<MemReadRespPacket>(&MemReadRespPacket::renew, i, op, ret, a1);
+	auto                    rc = acalsim::top->getRecycleContainer();
+	XBarMemReadRespPayload* memRespPkt =
+	    rc->acquire<XBarMemReadRespPayload>(&XBarMemReadRespPayload::renew, i, op, ret, a1);
 	memRespPkt->setTid(_memReqPkt->getTid());
 	rc->recycle(_memReqPkt);
-	callback(memRespPkt);
 }
 
-void DataMemory::memWriteReqHandler(acalsim::Tick _when, MemWriteReqPacket* _memReqPkt) {
+void DataMemory::memWriteReqHandler(acalsim::Tick _when, XBarMemWriteReqPayload* _memReqPkt) {
 	// LABELED_INFO(this->getName()) << "DataMemory doing mem write for tid " << _memReqPkt->getTid();
-	instr      i        = _memReqPkt->getInstr();
-	instr_type op       = _memReqPkt->getOP();
-	uint32_t   addr     = _memReqPkt->getAddr();
-	uint32_t   data     = _memReqPkt->getData();
-	auto       callback = _memReqPkt->getCallback();
+	instr      i    = _memReqPkt->getInstr();
+	instr_type op   = _memReqPkt->getOP();
+	uint32_t   addr = _memReqPkt->getAddr();
+	uint32_t   data = _memReqPkt->getData();
 
 	size_t bytes = 0;
 
@@ -86,9 +84,8 @@ void DataMemory::memWriteReqHandler(acalsim::Tick _when, MemWriteReqPacket* _mem
 		}
 	}
 
-	auto                rc         = acalsim::top->getRecycleContainer();
-	MemWriteRespPacket* memRespPkt = rc->acquire<MemWriteRespPacket>(&MemWriteRespPacket::renew, i);
+	auto                     rc         = acalsim::top->getRecycleContainer();
+	XBarMemWriteRespPayload* memRespPkt = rc->acquire<XBarMemWriteRespPayload>(&XBarMemWriteRespPayload::renew, i);
 	memRespPkt->setTid(_memReqPkt->getTid());
 	rc->recycle(_memReqPkt);
-	callback(memRespPkt);
 }

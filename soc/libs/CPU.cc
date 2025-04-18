@@ -161,18 +161,10 @@ void CPU::commitInstr(const instr& _i) {
 }
 
 bool CPU::BusMemRead(const instr& _i, instr_type _op, uint32_t _addr, operand _a1) {
-	auto    rc      = acalsim::top->getRecycleContainer();
-	int     latency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_read_latency");
-	AXIBus* bus     = dynamic_cast<AXIBus*>(this->getDownStream("DSBus"));
+	auto rc      = acalsim::top->getRecycleContainer();
+	int  latency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_read_latency");
 
-	/* CallBack preparation*/
-	auto bus_callback = [this](MemReadRespPacket* _pkt) {
-		dynamic_cast<AXIBus*>(this->getDownStream("DSBus"))->memReadRespHandler_CPU(_pkt);
-	};
-	// DataMem's address
-	auto cpu_callback = [this](BusMemReadRespPacket* _pkt) { this->memReadBusRespHandler(_pkt); };
-
-	MemReadReqPacket* pkt = rc->acquire<MemReadReqPacket>(&MemReadReqPacket::renew, bus_callback, _i, _op, _addr, _a1);
+	MemReadReqPacket*              pkt = rc->acquire<MemReadReqPacket>(&MemReadReqPacket::renew, _i, _op, _addr, _a1);
 	std::vector<MemReadReqPacket*> packetVec = {pkt};  // Explicit vector
 
 	BusMemReadReqPacket* bus_pkt =
@@ -185,10 +177,6 @@ bool CPU::BusMemRead(const instr& _i, instr_type _op, uint32_t _addr, operand _a
 		// LABELED_INFO(this->getName()) << "Send a read request to bus";
 		// send packet instead of event trigger
 		m_port->push(bus_pkt);
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-		    /* pid */ "Req-" + std::to_string(tid), /* name */ "CPU program DM (read)",
-		    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid),
-		    /* args */ new MemRequestInfoRecord(tid, _addr, 1)));
 	} else {
 		this->request_queue.push(bus_pkt);
 	}
@@ -220,10 +208,6 @@ bool CPU::BusmemWrite(const instr& _i, instr_type _op, uint32_t _addr, uint32_t 
 	if (m_port->isPushReady()) {
 		// LABELED_INFO(this->getName()) << "Send a write request to bus";
 		m_port->push(bus_pkt);
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-		    /* pid */ "Req-" + std::to_string(tid), /* name */ "CPU program DM (Write)",
-		    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid),
-		    /* args */ new MemRequestInfoRecord(tid, _addr, 1)));
 		return true;
 	} else {
 		this->request_queue.push(bus_pkt);
@@ -257,20 +241,12 @@ void CPU::masterPortRetry(const std::string& portName) {
 			auto real_req = read_req->getMemReadReqPkt()[0];
 			auto _addr    = real_req->getAddr();
 			auto tid      = read_req->getTransactionID();
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(tid), /* name */ "CPU program DM (Write)",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid),
-			    /* args */ new MemRequestInfoRecord(tid, _addr, 1)));
 			m_port->push(read_req);
 		} else if (auto write_req = dynamic_cast<BusMemWriteReqPacket*>(this->request_queue.front())) {
 			auto  real_req = write_req->getMemWriteReqPkt()[0];
 			auto  _addr    = real_req->getAddr();
 			auto  tid      = write_req->getTransactionID();
 			auto& _i       = real_req->getInstr();
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(tid), /* name */ "CPU program DM (Write)",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid),
-			    /* args */ new MemRequestInfoRecord(tid, _addr, 1)));
 			m_port->push(write_req);
 			pc += 4;
 			commitInstr(_i);
@@ -286,21 +262,12 @@ void CPU::memReadBusRespHandler(BusMemReadRespPacket* _pkt) {
 	for (auto& memPkt : memPackets) { this->memReadRespHandler(memPkt); }
 	int tid = _pkt->getTransactionID();
 	acalsim::top->getRecycleContainer()->recycle(_pkt);
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-	    /* pid */ "Req-" + std::to_string(tid), /* name */ "Finish read transaction",
-	    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid)));
-	// LABELED_INFO(this->getName()) << "CPU finish read transaction " << _pkt->getTransactionID();
 }
 
 void CPU::memWriteBusRespHandler(BusMemWriteRespPacket* _pkt) {
 	// LABELED_INFO(this->getName()) << "CPU finish write transaction" << _pkt->getTransactionID();
 	auto memPackets = _pkt->getMemWriteRespPkt();
 	int  tid        = _pkt->getTransactionID();
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-	    /* pid */ "Req-" + std::to_string(tid), /* name */ "Finish write transaction",
-	    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid)));
-	acalsim::top->getRecycleContainer()->recycle(_pkt);
-	// LABELED_INFO(this->getName()) << "CPU finish write transaction " << _pkt->getTransactionID();
 }
 
 void CPU::memReadRespHandler(MemReadRespPacket* _pkt) {

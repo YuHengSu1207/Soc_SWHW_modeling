@@ -9,8 +9,7 @@
 #include "DataMemory.hh"
 #include "event/BusTransactionEvent.hh"
 #include "event/MemReqEvent.hh"
-#include "packet/BusPacket.hh"
-#include "packet/MemPacket.hh"
+#include "packet/XBarPacket.hh"
 
 class BusMemReadRespPacket;
 class BusMemWriteRespPacket;
@@ -40,8 +39,8 @@ public:
 	void masterPortRetry(const std::string& portName) final;
 
 	// MMIO read/write from CPU
-	void writeMMIO(acalsim::Tick _when, MemWriteReqPacket* _memReqPkt);
-	void readMMIO(acalsim::Tick _when, MemReadReqPacket* _memReqPkt);
+	void writeMMIO(acalsim::Tick _when, XBarMemWriteReqPayload* _memReqPkt);
+	void readMMIO(acalsim::Tick _when, XBarMemReadReqPayload* _memReqPkt);
 
 	/*
 	Response handler

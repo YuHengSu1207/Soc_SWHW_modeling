@@ -10,9 +10,7 @@ void AXIBus::memReadDM(acalsim::Tick when, acalsim::SimPacket* pkt) {
 	// LABELED_INFO(this->getName()) << "AXIBus to memory transfer read with tid : " << memReqPkt->getTransactionID();
 	if (auto dm = dynamic_cast<DataMemory*>(this->getDownStream("DSDMem"))) {
 		int tid = memReqPkt->getTransactionID();
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-		    /* ph */ "B", /* pid */ "Req-" + std::to_string(tid), /* name */ "DM read",
-		    /* ts */ when, /* cat */ "", /* tid */ std::to_string(tid)));
+
 		for (int i = 0; i < memReqPkt->getBurstSize(); i++) {
 			MemReadReqPacket* dm_pkt = memReqPkt->getMemReadReqPkt()[i];
 			dm_pkt->setTid(memReqPkt->getTransactionID());
@@ -38,9 +36,6 @@ void AXIBus::memWriteDM(acalsim::Tick when, acalsim::SimPacket* pkt) {
 	burst_num_map[memReqPkt->getTransactionID()] = memReqPkt->getBurstSize();
 	if (auto dm = dynamic_cast<DataMemory*>(this->getDownStream("DSDMem"))) {
 		int tid = memReqPkt->getTransactionID();
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-		    /* ph */ "B", /* pid */ "Req-" + std::to_string(tid), /* name */ "DM write",
-		    /* ts */ when, /* cat */ "", /* tid */ std::to_string(tid)));
 
 		for (int i = 0; i < memReqPkt->getBurstSize(); i++) {
 			MemWriteReqPacket* dm_pkt = memReqPkt->getMemWriteReqPkt()[i];
@@ -67,9 +62,6 @@ void AXIBus::memReadDMA(acalsim::Tick when, acalsim::SimPacket* pkt) {
 	// memReqPkt->getTransactionID();
 	if (auto dma = dynamic_cast<DMAController*>(this->getDownStream("DSDMA"))) {
 		int tid = memReqPkt->getTransactionID();
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-		    /* ph */ "B", /* pid */ "Req-" + std::to_string(tid), /* name */ "CPU peek MMIO",
-		    /* ts */ when, /* cat */ "", /* tid */ std::to_string(tid)));
 
 		for (int i = 0; i < memReqPkt->getBurstSize(); i++) {
 			MemReadReqPacket* dm_pkt = memReqPkt->getMemReadReqPkt()[i];
@@ -96,9 +88,6 @@ void AXIBus::memWriteDMA(acalsim::Tick when, acalsim::SimPacket* pkt) {
 	//                              << memReqPkt->getTransactionID();
 	if (auto dma = dynamic_cast<DMAController*>(this->getDownStream("DSDMA"))) {
 		int tid = memReqPkt->getTransactionID();
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-		    /* ph */ "B", /* pid */ "Req-" + std::to_string(tid), /* name */ "CPU write MMIO",
-		    /* ts */ when, /* cat */ "", /* tid */ std::to_string(tid)));
 
 		for (int i = 0; i < memReqPkt->getBurstSize(); i++) {
 			MemWriteReqPacket* dm_pkt = memReqPkt->getMemWriteReqPkt()[i];
@@ -125,13 +114,6 @@ void AXIBus::memReadRespHandler_CPU(acalsim::SimPacket* pkt) {
 	this->burst_num_map.erase(memRespPkt->getTid());
 
 	int tid = memRespPkt->getTid();
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-	    /* ph */ "E", /* pid */ "Req-" + std::to_string(tid), /* name */ "DM read",
-	    /* ts */ acalsim::top->getGlobalTick(), /* cat */ "", /* tid */ std::to_string(tid)));
-
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-	    /* pid */ "Req-" + std::to_string(tid), /* name */ "Bus acq path (CPU)",
-	    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid)));
 
 	// LABELED_INFO(this->getName()) << "AXIBus sending read resp back to cpu at Tid " << memRespPkt->getTid();
 	std::vector<MemReadRespPacket*> memPackets = {memRespPkt};
@@ -154,13 +136,6 @@ void AXIBus::memWriteRespHandler_CPU(acalsim::SimPacket* pkt) {
 	this->burst_num_map.erase(memRespPkt->getTid());
 
 	int tid = memRespPkt->getTid();
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-	    /* ph */ "E", /* pid */ "Req-" + std::to_string(tid), /* name */ "DM write",
-	    /* ts */ acalsim::top->getGlobalTick(), /* cat */ "", /* tid */ std::to_string(tid)));
-
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-	    /* pid */ "Req-" + std::to_string(tid), /* name */ "Bus acq path (CPU)",
-	    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid)));
 
 	// LABELED_INFO(this->getName()) << "AXIBus sending write resp back to cpu at Tid " << memRespPkt->getTid();
 	std::vector<MemWriteRespPacket*> memPackets = {memRespPkt};
@@ -185,13 +160,6 @@ void AXIBus::memReadRespHandler_DMA(acalsim::SimPacket* pkt) {
 	memPackets.push_back(memRespPkt);
 	if (this->cur_num_map[memRespPkt->getTid()] == this->burst_num_map[memRespPkt->getTid()]) {
 		int tid = memRespPkt->getTid();
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-		    /* ph */ "E", /* pid */ "Req-" + std::to_string(tid), /* name */ "CPU peek MMIO",
-		    /* ts */ acalsim::top->getGlobalTick(), /* cat */ "", /* tid */ std::to_string(tid)));
-
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-		    /* pid */ "Req-" + std::to_string(tid), /* name */ "Bus acq path (DMA)",
-		    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid)));
 
 		int                   burst_num = this->burst_num_map[memRespPkt->getTid()];
 		BusMemReadRespPacket* new_pkt =
@@ -220,13 +188,6 @@ void AXIBus::memWriteRespHandler_DMA(acalsim::SimPacket* pkt) {
 	memPackets.push_back(memRespPkt);
 	if (this->cur_num_map[memRespPkt->getTid()] == this->burst_num_map[memRespPkt->getTid()]) {
 		int tid = memRespPkt->getTid();
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-		    /* ph */ "E", /* pid */ "Req-" + std::to_string(tid), /* name */ "CPU write MMIO",
-		    /* ts */ acalsim::top->getGlobalTick(), /* cat */ "", /* tid */ std::to_string(tid)));
-
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-		    /* pid */ "Req-" + std::to_string(tid), /* name */ "Bus acq path (DMA)",
-		    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "", /* tid */ std::to_string(tid)));
 
 		int                    burst_num = burst_num_map[memRespPkt->getTid()];
 		BusMemWriteRespPacket* new_pkt =

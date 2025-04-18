@@ -14,34 +14,16 @@ void BusReqEvent::process() {
 		auto                                 _addr       = readPackets[0]->getAddr();
 		if (_addr >= 0xf000 && _addr <= 0xf03f) {
 			// MMIO
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(Readreq->getTransactionID()),
-			    /* name */ "(Bus) CPU program dma (read req)",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(Readreq->getTransactionID())));
 			this->bus->memReadDMA(acalsim::top->getGlobalTick() + 1, (acalsim::SimPacket*)(this->memReqPkt));
 		} else {
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(Readreq->getTransactionID()), /* name */ "Bus read to DM acq",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(Readreq->getTransactionID())));
 			this->bus->memReadDM(acalsim::top->getGlobalTick() + 1, (acalsim::SimPacket*)(this->memReqPkt));
 		}
 	} else if (auto Writereq = dynamic_cast<BusMemWriteReqPacket*>(this->memReqPkt)) {
 		const std::vector<MemWriteReqPacket*> writePackets = Writereq->getMemWriteReqPkt();
 		auto                                  _addr        = writePackets[0]->getAddr();
 		if (_addr >= 0xf000 && _addr <= 0xf03f) {
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(Writereq->getTransactionID()),
-			    /* name */ "(Bus) CPU program dma (write req)",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(Writereq->getTransactionID())));
 			this->bus->memWriteDMA(acalsim::top->getGlobalTick() + 1, (acalsim::SimPacket*)(this->memReqPkt));
 		} else {
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(Writereq->getTransactionID()), /* name */ "Bus write to DM acq",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(Writereq->getTransactionID())));
 			this->bus->memWriteDM(acalsim::top->getGlobalTick() + 1, (acalsim::SimPacket*)(this->memReqPkt));
 		}
 	} else {

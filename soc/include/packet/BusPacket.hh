@@ -1,6 +1,7 @@
 #ifndef SOC_INCLUDE_BUS_PACKET_MEMPACKET_HH_
 #define SOC_INCLUDE_BUS_PACKET_MEMPACKET_HH_
 #include <cmath>
+#include <string>
 
 #include "ACALSim.hh"
 #include "Bus.hh"
@@ -16,27 +17,6 @@ class BusMemReadReqPacket;
 class BusMemWriteRespPacket;
 class BusMemReadRespPacket;
 
-class BurstModeBusPacket {
-public:
-	/** @brief Constructor that initializes burst mode and assigns a unique TransactionID */
-	explicit BurstModeBusPacket(int burstMode = 0)
-	    : burstSize(pow(2, burstMode)), burstLength(burstMode), TransactionID(0) {}
-
-	int        getBurstLen() const { return burstLength; }
-	int        getBurstSize() const { return burstSize; }
-	int        getTransactionID() const { return TransactionID; }
-	void       setTransactionID(int tid) { TransactionID = tid; }
-	static int generateTransactionID() {
-		static std::atomic<int> transactionCounter{0};  // Atomic counter for thread safety
-		return transactionCounter++;
-	}
-
-protected:
-	int TransactionID;
-	int burstLength;
-	int burstSize;
-};
-
 class BusMemReadReqPacket : public BurstModeBusPacket, public acalsim::SimPacket {
 public:
 	// Default constructor
@@ -47,7 +27,7 @@ public:
 	    : BurstModeBusPacket(burstMode), memReadReqPkt(memPackets), callback(std::move(cb)) {}
 	std::vector<MemReadReqPacket*> getMemReadReqPkt() const { return memReadReqPkt; }
 
-	void visit(acalsim::Tick _when, acalsim::SimModule& _module) override;
+	void visit(acalsim::Tick _when, acalsim::SimModule& _module) override{};
 	/** @brief Visit function for simulator interaction */
 	void visit(acalsim::Tick _when, acalsim::SimBase& _simulator) override;
 
@@ -69,7 +49,7 @@ public:
 
 	std::vector<MemWriteReqPacket*> getMemWriteReqPkt() const { return memWriteReqPkt; }
 
-	void visit(acalsim::Tick _when, acalsim::SimModule& _module) override;
+	void visit(acalsim::Tick _when, acalsim::SimModule& _module) override{};
 	/** @brief Visit function for simulator interaction */
 	void visit(acalsim::Tick _when, acalsim::SimBase& _simulator) override;
 
@@ -88,9 +68,9 @@ public:
 
 	std::vector<MemReadRespPacket*> getMemReadRespPkt() const { return memReadRespPkt; }
 
-	void visit(acalsim::Tick _when, acalsim::SimModule& _module) override;
+	void visit(acalsim::Tick _when, acalsim::SimModule& _module) override{};
 	/** @brief Visit function for simulator interaction */
-	void visit(acalsim::Tick _when, acalsim::SimBase& _simulator) override;
+	void visit(acalsim::Tick _when, acalsim::SimBase& _simulator) override{};
 
 	void renew(int burst_size, std::vector<MemReadRespPacket*>& memPackets);
 
@@ -106,9 +86,9 @@ public:
 
 	std::vector<MemWriteRespPacket*> getMemWriteRespPkt() const { return memWriteRespPkt; }
 
-	void visit(acalsim::Tick _when, acalsim::SimModule& _module) override;
+	void visit(acalsim::Tick _when, acalsim::SimModule& _module) override{};
 	/** @brief Visit function for simulator interaction */
-	void visit(acalsim::Tick _when, acalsim::SimBase& _simulator) override;
+	void visit(acalsim::Tick _when, acalsim::SimBase& _simulator) override{};
 
 	void renew(int burst_size, std::vector<MemWriteRespPacket*>& memPackets);
 

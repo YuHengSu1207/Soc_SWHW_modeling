@@ -83,7 +83,9 @@ public:
 
 		// Data Memory Timing Model
 		this->dmem = new DataMemory("DataMemory", mem_size);
-		this->bus  = new AXIBus("AXIBus");
+		// XBar
+		this->XBar = new acalsim::crossbar::CrossBar("CrossBar", 2, 3);
+
 		// Instruction Set Architecture Emulator (Functional Model)
 		this->isaEmulator = new Emulator("RISCV RV32I Emulator");
 
@@ -99,35 +101,56 @@ public:
 		// register simulators
 		this->addSimulator(this->cpu);
 		this->addSimulator(this->dmem);
-		this->addSimulator(this->bus);
+		this->addSimulator(this->XBar);
 		this->addSimulator(this->dma);
 		this->addSimulator(this->cfu);
 
 		// still add those upstream & downstream
 		// connect modules (connected_module, master port name, slave port name)
-		this->cpu->addDownStream(this->bus, "DSBus");
-		this->bus->addDownStream(this->dmem, "DSDMem");
-		this->bus->addUpStream(this->cpu, "USCPU");
-		this->dmem->addUpStream(this->bus, "USBus");
+		this->cpu->addDownStream(this->XBar, "DSBus");
+		this->XBar->addDownStream(this->dmem, "DSDMem");
+		this->XBar->addUpStream(this->cpu, "USCPU");
+		this->dmem->addUpStream(this->XBar, "USBus");
 		// add the DMA
-		this->dma->addDownStream(this->bus, "DSBus");
-		this->bus->addUpStream(this->dma, "USDMA");
-		this->dma->addUpStream(this->bus, "USBus");
-		this->bus->addDownStream(this->dma, "DSDMA");
+		this->dma->addDownStream(this->XBar, "DSBus");
+		this->XBar->addUpStream(this->dma, "USDMA");
+		this->dma->addUpStream(this->XBar, "USBus");
+		this->XBar->addDownStream(this->dma, "DSDMA");
 		// add CFU
 		this->cpu->addDownStream(this->cfu, "DSCFU");
 		this->cfu->addUpStream(this->cpu, "USCPU");
 
 		// connect ports cpu -> bus
 		// connect ports dma -> bus
-		acalsim::SimPortManager::ConnectPort(cpu, bus, cpu->getName() + "-m", bus->getName() + "-s");
-		acalsim::SimPortManager::ConnectPort(dma, bus, dma->getName() + "-m", bus->getName() + "-s");
+		this->cpu->addPRMasterPort("bus-m", XBar->getPipeRegister("Req", 0));
+		this->dma->addPRMasterPort("bus-m", XBar->getPipeRegister("Req", 1));
+
+		for (auto mp : XBar->getMasterPortsBySlave("Req", 0)) {
+			acalsim::SimPortManager::ConnectPort(XBar, this->cpu, mp->getName(), "bus-s");
+		}
+
+		for (auto mp : XBar->getMasterPortsBySlave("Req", 1)) {
+			acalsim::SimPortManager::ConnectPort(XBar, this->dma, mp->getName(), "bus-s");
+		}
+
 		// connect channel bus -> dm
 		// connect channel bus -> dma
-		ChannelPortManager::ConnectPort(bus, dmem, bus->getName() + "-m_dm", dmem->getName() + "-s");
-		ChannelPortManager::ConnectPort(bus, dma, bus->getName() + "-m_dma", dma->getName() + "-s");
-		// channel bus -> cpu
-		ChannelPortManager::ConnectPort(bus, cpu, bus->getName() + "-m_cpu", cpu->getName() + "-s_dm");
+		// connect channel bus -> cpu
+		this->dmem->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 0));
+		this->dma->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 1));
+		this->cpu->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 2));
+
+		for (auto mp : XBar->getMasterPortsBySlave("Resp", 0)) {
+			acalsim::SimPortManager::ConnectPort(bus, this->dmem, mp->getName(), "bus-s");
+		}
+
+		for (auto mp : XBar->getMasterPortsBySlave("Resp", 1)) {
+			acalsim::SimPortManager::ConnectPort(bus, this->dma, mp->getName(), "bus-s");
+		}
+
+		for (auto mp : XBar->getMasterPortsBySlave("Resp", 2)) {
+			acalsim::SimPortManager::ConnectPort(bus, this->cpu, mp->getName(), "bus-s");
+		}
 
 		// channel cpu <-> cfu
 		ChannelPortManager::ConnectPort(cpu, cfu, cpu->getName() + "-m_cfu", cfu->getName() + "-s_cpu");
@@ -151,13 +174,21 @@ public:
 		this->isaEmulator->normalize_labels(this->cpu->getIMemPtr());
 	}
 
+	void registerPipeRegisters() {
+		this->SimTop::registerPipeRegisters();
+		auto bus = static_cast<acalsim::crossbar::CrossBar*>(this->getSimulator("CrossBar"));
+		for (auto reg : bus->getAllPipeRegisters("Req")) { this->getPipeRegisterManager()->addPipeRegister(reg); }
+		for (auto reg : bus->getAllPipeRegisters("Resp")) { this->getPipeRegisterManager()->addPipeRegister(reg); }
+	}
+
 private:
-	Emulator*      isaEmulator;  ///< ISA behavior model for instruction emulation
-	CPU*           cpu;          ///< Single-cycle CPU hardware model
-	DataMemory*    dmem;         ///< Data memory subsystem model
-	AXIBus*        bus;          // bus support
-	DMAController* dma;          ///< DMA controller for data transfer
-	CFU*           cfu;
+	Emulator*                    isaEmulator;  ///< ISA behavior model for instruction emulation
+	CPU*                         cpu;          ///< Single-cycle CPU hardware model
+	DataMemory*                  dmem;         ///< Data memory subsystem model
+	AXIBus*                      bus;          // bus support
+	DMAController*               dma;          ///< DMA controller for data transfer
+	CFU*                         cfu;
+	acalsim::crossbar::CrossBar* XBar;
 };
 
 #endif  // SOC_INCLUDE_SOC_HH_

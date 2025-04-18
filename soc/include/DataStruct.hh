@@ -70,6 +70,7 @@ typedef enum {
 	S_AMULI8I8S_VV_NQ,
 	S_AMULI8I8S_VV_L,
 	MUL,
+	NOP,
 	HCF
 } instr_type;
 

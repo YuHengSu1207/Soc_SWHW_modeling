@@ -11,11 +11,10 @@ class BusMemReadRespPacket;
 /**
  * Handle CPU writes to MMIO registers via the AXI Bus
  */
-void DMAController::writeMMIO(acalsim::Tick _when, MemWriteReqPacket* _memReqPkt) {
+void DMAController::writeMMIO(acalsim::Tick _when, XBarMemWriteReqPayload* _memReqPkt) {
 	// LABELED_INFO(this->getName()) << "DMA MMIO write at tick " << _when << " to address " <<
-	uint32_t addr     = _memReqPkt->getAddr() & 0x3F;  // Mask to align with MMIO range
-	uint32_t data     = _memReqPkt->getData();
-	auto     callback = _memReqPkt->getCallback();
+	uint32_t addr = _memReqPkt->getAddr() & 0x3F;  // Mask to align with MMIO range
+	uint32_t data = _memReqPkt->getData();
 
 	switch (addr) {
 		case 0x0:  // ENABLE Register
@@ -41,23 +40,22 @@ void DMAController::writeMMIO(acalsim::Tick _when, MemWriteReqPacket* _memReqPkt
 	}
 
 	// Send a response packet to acknowledge the MMIO write
-	auto                rc      = acalsim::top->getRecycleContainer();
-	MemWriteRespPacket* respPkt = rc->acquire<MemWriteRespPacket>(&MemWriteRespPacket::renew, _memReqPkt->getInstr());
+	auto                     rc = acalsim::top->getRecycleContainer();
+	XBarMemWriteRespPayload* respPkt =
+	    rc->acquire<XBarMemWriteRespPayload>(&XBarMemWriteRespPayload::renew, _memReqPkt->getInstr());
 	respPkt->setTid(_memReqPkt->getTid());
 
 	rc->recycle(_memReqPkt);
-	callback(respPkt);
 }
 
 /**
  * Handle CPU reads from MMIO registers via the AXI Bus
  */
-void DMAController::readMMIO(acalsim::Tick _when, MemReadReqPacket* _memReqPkt) {
+void DMAController::readMMIO(acalsim::Tick _when, XBarMemReadReqPayload* _memReqPkt) {
 	// LABELED_INFO(this->getName()) << "DMA MMIO read at tick " << _when << " from address " << _memReqPkt->getAddr();
 
-	uint32_t addr     = _memReqPkt->getAddr() & 0x3F;
-	uint32_t data     = 0;
-	auto     callback = _memReqPkt->getCallback();
+	uint32_t addr = _memReqPkt->getAddr() & 0x3F;
+	uint32_t data = 0;
 
 	switch (addr) {
 		case 0x0:  // ENABLE Register
@@ -79,13 +77,12 @@ void DMAController::readMMIO(acalsim::Tick _when, MemReadReqPacket* _memReqPkt) 
 	}
 
 	// Send a response packet with the MMIO read value
-	auto               rc      = acalsim::top->getRecycleContainer();
-	MemReadRespPacket* respPkt = rc->acquire<MemReadRespPacket>(&MemReadRespPacket::renew, _memReqPkt->getInstr(),
-	                                                            _memReqPkt->getOP(), data, _memReqPkt->getA1());
+	auto                    rc      = acalsim::top->getRecycleContainer();
+	XBarMemReadRespPayload* respPkt = rc->acquire<XBarMemReadRespPayload>(
+	    &XBarMemReadRespPayload::renew, _memReqPkt->getInstr(), _memReqPkt->getOP(), data, _memReqPkt->getA1());
 	respPkt->setTid(_memReqPkt->getTid());
 
 	rc->recycle(_memReqPkt);
-	callback(respPkt);
 }
 
 /**
@@ -113,10 +110,6 @@ void DMAController::initialized_transaction() {
 	                              << ", height=" << this->true_height;
 	LABELED_INFO(this->getName()) << "DMA stride: src=" << (int)sourceStride << ", dst=" << (int)destStride
 	                              << " total Bytes =" << totalElements << " total words = " << totalWords;
-
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-	    /* ph */ "B", /* pid */ "DMA-" + std::to_string(this->dma_tx_num), /* name */ "DMA_Transaction",
-	    /* ts */ acalsim::top->getGlobalTick(), /* cat */ "", /* tid */ ""));
 
 	this->wordsTransferred = 0;
 	this->bufferIndex      = 0;
@@ -219,10 +212,6 @@ void DMAController::scheduleReadsForBuffer() {
 
 	auto m_port = this->getMasterPort(this->getName() + "-m");
 	if (m_port->isPushReady()) {
-		acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-		    /* pid */ "Req-" + std::to_string(tid), /* name */ "(DMA) read from DM",
-		    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-		    /* tid */ std::to_string(tid)));
 		m_port->push(busReadPkt);
 	} else {
 		this->request_queue.push(busReadPkt);
@@ -252,10 +241,6 @@ void DMAController::handleReadResponse(BusMemReadRespPacket* pkt) {
 	}
 
 	int tid = pkt->getTransactionID();
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-	    /* pid */ "Req-" + std::to_string(tid), /* name */ "(DMA) get read response from DM",
-	    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-	    /* tid */ std::to_string(tid)));
 
 	// We scheduled only 1 BusMemReadReqPacket, so decrement
 	this->pendingBusReadResponses--;
@@ -333,10 +318,6 @@ void DMAController::scheduleWritesFromBuffer() {
 
 		auto m_port = this->getMasterPort(this->getName() + "-m");
 		if (m_port->isPushReady()) {
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(tid), /* name */ "(DMA) write from BufferMemory to DM",
-			    /* ts */ acalsim::top->getGlobalTick() + chunkCounter, /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(tid)));
 			m_port->push(busWritePkt);
 		} else {
 			this->request_queue.push(busWritePkt);
@@ -414,18 +395,10 @@ void DMAController::masterPortRetry(const std::string& portName) {
 		if (auto read_req = dynamic_cast<BusMemReadReqPacket*>(this->request_queue.front())) {
 			auto real_req = read_req->getMemReadReqPkt()[0];
 			auto tid      = read_req->getTransactionID();
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(tid), /* name */ "(DMA) read from DM",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(tid)));
 			m_port->push(read_req);
 		} else if (auto write_req = dynamic_cast<BusMemWriteReqPacket*>(this->request_queue.front())) {
 			auto real_req = write_req->getMemWriteReqPkt()[0];
 			auto tid      = write_req->getTransactionID();
-			acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-			    /* pid */ "Req-" + std::to_string(tid), /* name */ "(DMA) write from BufferMemory to DM",
-			    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-			    /* tid */ std::to_string(tid)));
 			m_port->push(write_req);
 		} else {
 			CLASS_ERROR << "Not a valid request";
@@ -535,11 +508,6 @@ void DMAController::handleWriteCompletion(BusMemWriteRespPacket* pkt) {
 	rc->recycle(pkt);
 	int tid = pkt->getTransactionID();
 
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createCompleteEvent(
-	    /* pid */ "Req-" + std::to_string(tid), /* name */ "(DMA) write from BufferMemory to DM",
-	    /* ts */ acalsim::top->getGlobalTick(), /* dur */ 1, /* cat */ "",
-	    /* tid */ std::to_string(tid)));
-
 	this->pendingBusWriteResponses--;
 	if (this->pendingBusWriteResponses == 0) {
 		// All writes for this buffer are done
@@ -562,9 +530,6 @@ void DMAController::transaction_complete() {
 	this->currentState = DmaState::IDLE;
 	this->done         = true;
 	this->enabled      = false;
-	acalsim::top->addChromeTraceRecord(acalsim::ChromeTraceRecord::createDurationEvent(
-	    /* ph */ "E", /* pid */ "DMA-" + std::to_string(this->dma_tx_num), /* name */ "DMA_Transaction",
-	    /* ts */ acalsim::top->getGlobalTick() + this->just_get_resp, /* cat */ "", /* tid */ ""));
 	this->dma_tx_num++;
 	this->just_get_resp = false;
 	// LABELED_INFO(this->getName()) << "DMA transaction complete!";
