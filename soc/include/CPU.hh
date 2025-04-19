@@ -27,6 +27,7 @@
 #include "packet/BusPacket.hh"
 #include "packet/CFUPacket.hh"
 #include "packet/MemPacket.hh"
+#include "MMIOUtil.hh"
 class BusMemWriteRespPacket;
 class BusMemReadRespPacket;
 
@@ -34,7 +35,7 @@ class BusMemReadRespPacket;
  * @class CPU A CPU model integrated with CPU ISA Emulator
  * @brief Implements a basic CPU with instruction execution, memory operations, and register file
  */
-class CPU : public acalsim::CPPSimBase {
+class CPU : public acalsim::CPPSimBase, public MMIOUTIL {
 public:
 	/**
 	 * @brief Constructor for the CPU class
@@ -42,11 +43,28 @@ public:
 	 * @param _emulator Pointer to the ISA emulator
 	 */
 	CPU(std::string _name, Emulator* _emulator);
-
+	
+	void step() override {
+		for (auto s_port : this->s_ports_) {
+			if (s_port.second->isPopValid()) {
+				auto packet = s_port.second->pop();
+				// read req handling
+				if(auto ReadRespPkt = dynamic_cast<XBarMemReadRespPacket*>(packet)){
+					this->memReadBusRespHandler(ReadRespPkt);
+				}
+				// Write req handling
+				if(auto WriteRespPkt = dynamic_cast<XBarMemWriteRespPacket*>(packet)){
+					this->memWriteBusRespHandler(WriteRespPkt);
+				}
+				this->accept(acalsim::top->getGlobalTick(), *packet);
+			}
+		}
+	}
+	
 	void init() override;
 	void cleanup() override;
 	void masterPortRetry(const std::string& portName) final;
-
+	void registerSimPort() { this->s_port = this->addSlavePort("bus-s", 1); }
 	/**
 	 * @brief Destructor that frees instruction memory
 	 */
@@ -89,9 +107,9 @@ public:
 	 */
 	bool BusmemWrite(const instr& _i, instr_type _op, uint32_t _addr, uint32_t _data);
 
-	void memReadBusRespHandler(BusMemReadRespPacket* _pkt);
+	void memReadBusRespHandler(XBarMemReadRespPacket* _pkt);
 
-	void memWriteBusRespHandler(BusMemWriteRespPacket* _pkt);
+	void memWriteBusRespHandler(XBarMemWriteRespPacket* _pkt);
 
 	// CFU support
 	void CFURespHandler(CFURespPacket* _pkt);
@@ -101,13 +119,13 @@ public:
 	 * @brief Handles response from memory read operations
 	 * @param _pkt Packet containing memory read response data
 	 */
-	void memReadRespHandler(MemReadRespPacket* _pkt);
+	void memReadRespHandler(XBarMemReadRespPayload* _pkt);
 
 	/**
 	 * @brief Handles response from memory write operations
 	 * @param _pkt Packet containing memory write response data
 	 */
-	void memWriteRespHandler(MemWriteRespPacket* _pkt);
+	void memWriteRespHandler(XBarMemWriteRespPayload* _pkt);
 
 	/**
 	 * @brief Returns pointer to instruction memory
@@ -155,7 +173,9 @@ private:
 	uint32_t  pc;           ///< Program counter
 	// the request queue
 	std::queue<acalsim::SimPacket*> request_queue;
-	int                             inst_cnt;  ///< Counter for executed instructions
+	acalsim::SimPipeRegister* m_reg;
+	acalsim::SlavePort*       s_port;
+	int   inst_cnt;  ///< Counter for executed instructions
 };
 
 #endif

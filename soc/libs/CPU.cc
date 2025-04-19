@@ -26,10 +26,12 @@
 
 CPU::CPU(std::string _name, Emulator* _emulator)
     : acalsim::CPPSimBase(_name), pc(0), inst_cnt(0), isaEmulator(_emulator) {
-	this->addMasterPort(_name + "-m");
+	this->registerSimPort();
+	LABELED_INFO(name) << "CPU::init() - is connected to PR:" << this->m_reg->getName();
 }
 
 void CPU::init() {
+	this->m_reg = this->getPipeRegister("bus-m");
 	// Inject trigger event
 	auto data_offset = acalsim::top->getParameter<int>("Emulator", "data_offset");
 	this->imem       = new instr[data_offset / 4];
@@ -164,21 +166,15 @@ bool CPU::BusMemRead(const instr& _i, instr_type _op, uint32_t _addr, operand _a
 	auto rc      = acalsim::top->getRecycleContainer();
 	int  latency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_read_latency");
 
-	MemReadReqPacket*              pkt = rc->acquire<MemReadReqPacket>(&MemReadReqPacket::renew, _i, _op, _addr, _a1);
-	std::vector<MemReadReqPacket*> packetVec = {pkt};  // Explicit vector
-
-	BusMemReadReqPacket* bus_pkt =
-	    rc->acquire<BusMemReadReqPacket>(&BusMemReadReqPacket::renew, 1, packetVec, cpu_callback);
-	int tid = bus_pkt->getTransactionID();
-	bus_pkt->setTransactionID(tid);
-
-	auto m_port = this->getMasterPort(this->getName() + "-m");
-	if (m_port->isPushReady()) {
-		// LABELED_INFO(this->getName()) << "Send a read request to bus";
+	auto Pkt = Construct_MemReadpkt_non_burst(_i, _op, _addr, _a1 , "cpu" , 1);
+	int tid = Pkt->getTransactionID();
+	bool is_stalled = this->m_reg->isStalled();
+	if (!is_stalled && this->m_reg->push(Pkt.get())) {
+		LABELED_INFO(this->getName()) << "Send a read request to crosssbar";
 		// send packet instead of event trigger
-		m_port->push(bus_pkt);
-	} else {
-		this->request_queue.push(bus_pkt);
+	}
+	else{
+		this->request_queue.push(Pkt.get());
 	}
 	return false;
 }
@@ -186,31 +182,16 @@ bool CPU::BusMemRead(const instr& _i, instr_type _op, uint32_t _addr, operand _a
 bool CPU::BusmemWrite(const instr& _i, instr_type _op, uint32_t _addr, uint32_t _data) {
 	auto rc       = acalsim::top->getRecycleContainer();
 	int  latency  = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_write_latency");
-	auto callback = [this](MemWriteRespPacket* _pkt) { this->memWriteRespHandler(_pkt); };
-
-	AXIBus* bus = dynamic_cast<AXIBus*>(this->getDownStream("DSBus"));
-
-	auto bus_callback = [this](MemWriteRespPacket* _pkt) {
-		dynamic_cast<AXIBus*>(this->getDownStream("DSBus"))->memWriteRespHandler_CPU(_pkt);
-	};
-	auto cpu_callback = [this](BusMemWriteRespPacket* _pkt) { this->memWriteBusRespHandler(_pkt); };
-
-	MemWriteReqPacket* pkt =
-	    rc->acquire<MemWriteReqPacket>(&MemWriteReqPacket::renew, bus_callback, _i, _op, _addr, _data);
-	std::vector<MemWriteReqPacket*> packetVec = {pkt};  // Explicit vector
-
-	BusMemWriteReqPacket* bus_pkt =
-	    rc->acquire<BusMemWriteReqPacket>(&BusMemWriteReqPacket::renew, 1, packetVec, cpu_callback);
-	int tid = bus_pkt->getTransactionID();
-	bus_pkt->setTransactionID(tid);
-
-	auto m_port = this->getMasterPort(this->getName() + "-m");
-	if (m_port->isPushReady()) {
-		// LABELED_INFO(this->getName()) << "Send a write request to bus";
-		m_port->push(bus_pkt);
-		return true;
-	} else {
-		this->request_queue.push(bus_pkt);
+	
+	auto write_pkt = Construct_MemWritepkt_non_burst(_i , _op , _addr, _data, "cpu" , 1);
+	write_pkt->getTransactionID();
+	bool is_stalled = this->m_reg->isStalled();
+	if (!is_stalled && this->m_reg->push(write_pkt.get())) {
+		LABELED_INFO(this->getName()) << "Send a write request to bus";
+		// send packet instead of event trigger
+	}
+	else{
+		this->request_queue.push(write_pkt.get());
 	}
 	return false;
 }
@@ -232,45 +213,39 @@ void CPU::CFURespHandler(CFURespPacket* _pkt) {
 }
 
 void CPU::masterPortRetry(const std::string& portName) {
-	// LABELED_INFO(this->getName()) << ": Master port retry at " << portName;
-	auto m_port = this->getMasterPort(this->getName() + "-m");
-	// LABELED_ASSERT(m_port->isPushReady(), "The master port should be ready at this time");
-	if (!this->request_queue.empty() && m_port->isPushReady()) {
-		// LABELED_INFO(this->getName()) << " send to the port";
-		if (auto read_req = dynamic_cast<BusMemReadReqPacket*>(this->request_queue.front())) {
-			auto real_req = read_req->getMemReadReqPkt()[0];
-			auto _addr    = real_req->getAddr();
-			auto tid      = read_req->getTransactionID();
-			m_port->push(read_req);
-		} else if (auto write_req = dynamic_cast<BusMemWriteReqPacket*>(this->request_queue.front())) {
-			auto  real_req = write_req->getMemWriteReqPkt()[0];
-			auto  _addr    = real_req->getAddr();
-			auto  tid      = write_req->getTransactionID();
-			auto& _i       = real_req->getInstr();
-			m_port->push(write_req);
-			pc += 4;
-			commitInstr(_i);
+	bool is_stalled = this->m_reg->isStalled();
+	if (!is_stalled) {
+		LABELED_INFO(this->getName()) << " send to the port";
+		if (auto read_req = dynamic_cast<XBarMemReadReqPacket*>(this->request_queue.front())) {
+			if(this->m_reg->push(read_req)){
+				this->request_queue.pop();
+			}
+		} else if (auto write_req = dynamic_cast<XBarMemWriteReqPacket*>(this->request_queue.front())) {
+			auto  real_req = write_req->getPayloads()[0];
+			if(this->m_reg->push(write_req)){
+				pc += 4;
+				commitInstr(real_req->getInstr());
+			}
 		} else {
 			CLASS_ERROR << "Unexpected type";
 		}
-		this->request_queue.pop();
 	}
 }
 
-void CPU::memReadBusRespHandler(BusMemReadRespPacket* _pkt) {
-	auto memPackets = _pkt->getMemReadRespPkt();
+void CPU::memReadBusRespHandler(XBarMemReadRespPacket* _pkt) {
+	auto memPackets = _pkt->getPayloads();
 	for (auto& memPkt : memPackets) { this->memReadRespHandler(memPkt); }
 	int tid = _pkt->getTransactionID();
 	acalsim::top->getRecycleContainer()->recycle(_pkt);
 }
 
-void CPU::memWriteBusRespHandler(BusMemWriteRespPacket* _pkt) {
+void CPU::memWriteBusRespHandler(XBarMemWriteRespPacket* _pkt) {
 	// LABELED_INFO(this->getName()) << "CPU finish write transaction" << _pkt->getTransactionID();
-	auto memPackets = _pkt->getMemWriteRespPkt();
+	auto memPackets = _pkt->getPayloads();
 	int  tid        = _pkt->getTransactionID();
 }
 
-void CPU::memReadRespHandler(MemReadRespPacket* _pkt) {
+void CPU::memReadRespHandler(XBarMemReadRespPayload* _pkt) {
 	// LABELED_INFO(this->getName()) << "CPU memReadRespHandler() ";
 	uint32_t data    = _pkt->getData();
 	instr    i       = _pkt->getInstr();
@@ -281,7 +256,7 @@ void CPU::memReadRespHandler(MemReadRespPacket* _pkt) {
 	this->pc += 4;
 }
 
-void CPU::memWriteRespHandler(MemWriteRespPacket* _pkt) {
+void CPU::memWriteRespHandler(XBarMemWriteRespPayload* _pkt) {
 	// LABELED_INFO(this->getName()) << "CPU memWriteRespHandler() ";
 	instr i = _pkt->getInstr();
 	// acalsim::top->getRecycleContainer()->recycle(_pkt);

@@ -136,9 +136,9 @@ public:
 		// connect channel bus -> dm
 		// connect channel bus -> dma
 		// connect channel bus -> cpu
-		this->dmem->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 0));
-		this->dma->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 1));
-		this->cpu->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 2));
+		this->cpu->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 0));
+		this->dmem->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 1));
+		this->dma->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 2));
 
 		for (auto mp : XBar->getMasterPortsBySlave("Resp", 0)) {
 			acalsim::SimPortManager::ConnectPort(bus, this->dmem, mp->getName(), "bus-s");

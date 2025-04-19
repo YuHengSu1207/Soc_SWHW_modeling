@@ -34,7 +34,7 @@ protected:
 template <typename PayloadType>
 class XBarMemPacket : public acalsim::crossbar::CrossBarPacket, public BurstModeBusPacket {
 public:
-	XBarMemPacket() : acalsim::crossbar::CrossBarPacket(0, 0), BurstModeBusPacket(1) {}
+	XBarMemPacket() : acalsim::crossbar::CrossBarPacket(0, 0), BurstModeBusPacket(0) {}
 
 	XBarMemPacket(int burstMode, const std::vector<PayloadType*>& payloads, size_t src_idx = 0, size_t dst_idx = 0)
 	    : acalsim::crossbar::CrossBarPacket(src_idx, dst_idx), BurstModeBusPacket(burstMode), payloadList(payloads) {}
@@ -102,13 +102,15 @@ public:
 
 	void setTid(int _tid) { this->tid = _tid; }
 	int  getTid() const { return this->tid; }
-
+	std::string getCaller() const {return this->Caller;}
+	void setCaller(std::string _caller) {this->Caller = _caller;}
 	const instr& getInstr() const { return i; }
 	instr_type   getOP() const { return op; }
 	uint32_t     getAddr() const { return addr; }
 	operand      getA1() const { return a1; }
 
 private:
+	std::string Caller;
 	int        tid;
 	instr      i;
 	instr_type op;
@@ -132,13 +134,15 @@ public:
 
 	void setTid(int _tid) { this->tid = _tid; }
 	int  getTid() const { return this->tid; }
-
+	std::string getCaller() const {return this->Caller;}
+	void setCaller(std::string _caller) {this->Caller = _caller;}
 	const instr& getInstr() const { return i; }
 	instr_type   getOP() const { return op; }
 	uint32_t     getAddr() const { return addr; }
 	uint32_t     getData() const { return data; }
 
 private:
+	std::string Caller;
 	int        tid;
 	instr      i;
 	instr_type op;

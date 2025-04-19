@@ -13,53 +13,106 @@ class MMIOUTIL {
 	constexpr static uint32_t MMIO_BASE = 0xF000;
 	constexpr static uint32_t MMIO_END  = 0xF03F;
 
-	static size_t masterIndex(const std::string& caller) {
-		if (caller == "cpu") return 0;  // cpu -> Req[0]
-		if (caller == "dma") return 1;  // dma -> Req[1]
+	static size_t getIndex(const std::string& name) {
+		if (name == "cpu") return 0;  // cpu -> Req[0] / Resp[0]
+		if (name == "dma") return 1;  // dma -> Req[1] / Resp[1]
+		if (name == "dm") return 2;
 		return 0;                       // default / unknown
 	}
+	
 	static size_t slaveIndex(uint32_t addr) {
-		return (addr >= MMIO_BASE && addr <= MMIO_END) ? 1 /* DMA */ : 0 /* DM */;
+		if(addr >= MMIO_BASE && MMIO_END){
+			return 1;
+		}
+		else{
+			return 0;
+		}
 	}
 
 protected:
 	/* ----------------------------- READ -------------------------------- */
-	std::shared_ptr<XBarMemReadReqPacket> Construct_MemReadpkt(const instr& _i, instr_type _op, uint32_t _addr,
+	std::shared_ptr<XBarMemReadReqPacket> Construct_MemReadpkt_non_burst(const instr& _i, instr_type _op, uint32_t _addr,
 	                                                           operand _a1, const std::string& caller,
-	                                                           int burst /* log2(#beats) */ = 1) {
+	                                                           int burst /* log2(#beats) */ = 0) {
 		/* assemble burst payloads */
 		std::vector<XBarMemReadReqPayload*> payloads;
-		for (int i = 0; i < (1 << burst); ++i) {
-			uint32_t addr_i = _addr + static_cast<uint32_t>(i) * 4;  // 4‑byte words
-			operand  a1_i   = _a1;
-			a1_i.imm += i;
-
-			payloads.push_back(new XBarMemReadReqPayload(_i, _op, addr_i, a1_i));
-		}
-
-		size_t src = masterIndex(caller);
+		auto mem_req_packet = new XBarMemReadReqPayload(_i, _op, _addr, _a1);
+		mem_req_packet->setCaller(caller);
+		payloads.push_back(mem_req_packet);
+		size_t src = getIndex(caller);
 		size_t dst = slaveIndex(_addr);
-
 		return std::make_shared<XBarMemReadReqPacket>(burst, payloads, src, dst);
 	}
 
-	/* ----------------------------- WRITE ------------------------------- */
-	std::shared_ptr<XBarMemWriteReqPacket> Construct_MemWritepkt(const instr& _i, instr_type _op, uint32_t _addr,
-	                                                             uint32_t _data, const std::string& caller,
-	                                                             int burst /* log2(#beats) */ = 1) {
-		std::vector<XBarMemWriteReqPayload*> payloads;
-		for (int i = 0; i < (1 << burst); ++i) {
-			uint32_t addr_i = _addr + static_cast<uint32_t>(i) * 4;
-			uint32_t data_i = _data + static_cast<uint32_t>(i);  // example pattern
-
-			payloads.push_back(new XBarMemWriteReqPayload(_i, _op, addr_i, data_i));
+	std::shared_ptr<XBarMemReadReqPacket> Construct_MemReadpkt_burst(std::string _src,  std::vector<XBarMemReadReqPayload*>& payloads) {
+		/* assemble burst payloads */
+		int burst = int(log(payloads.size()));
+		for(auto payload : payloads){
+			payload->setCaller(_src);
 		}
+		size_t src = getIndex(_src);
+		size_t dst = slaveIndex(payloads[0]->getAddr());
+		return std::make_shared<XBarMemReadReqPacket>(burst, payloads, src, dst);
+	}
 
-		size_t src = masterIndex(caller);
+	std::shared_ptr<XBarMemWriteReqPacket> Construct_MemWritepkt_burst(std::string _src, std::vector<XBarMemWriteReqPayload*>& payloads) {
+		/* assemble burst payloads */
+		int burst = int(log(payloads.size()));
+		for(auto payload : payloads){
+			payload->setCaller(_src);
+		}
+		size_t src = getIndex(_src);
+		size_t dst = slaveIndex(payloads[0]->getAddr());
+		return std::make_shared<XBarMemWriteReqPacket>(burst, payloads, src, dst);
+
+	}
+
+	/* ----------------------------- WRITE ------------------------------- */
+	std::shared_ptr<XBarMemWriteReqPacket> Construct_MemWritepkt_non_burst(const instr& _i, instr_type _op, uint32_t _addr,
+	                                                             uint32_t _data, const std::string& caller,
+	                                                             int burst /* log2(#beats) */ = 0) {
+		std::vector<XBarMemWriteReqPayload*> payloads;
+		auto mem_req_packet = new XBarMemWriteReqPayload(_i, _op, _addr, _data);
+		mem_req_packet->setCaller(caller);
+		payloads.push_back(mem_req_packet);
+		size_t src = getIndex(caller);
 		size_t dst = slaveIndex(_addr);
-
 		return std::make_shared<XBarMemWriteReqPacket>(burst, payloads, src, dst);
 	}
+
+	 /* read‑response */
+	 std::shared_ptr<XBarMemReadRespPacket>
+	 Construct_MemReadRespPkt(const std::vector<XBarMemReadRespPayload*>& beats,
+							  const std::string&                          src,
+							  const std::string&                          dst /*DataMem*/){
+
+	    int burstMode = (beats.size() == 1) ? 0 : static_cast<int>(std::ceil(std::log2(beats.size())));
+ 
+		size_t dst_idx = getIndex(dst);
+		size_t src_idx = getIndex(src);
+
+		return std::make_shared<XBarMemReadRespPacket>(burstMode,
+														beats,
+														src_idx,
+														dst_idx);
+	 }
+ 
+	 /* write‑response */
+	 std::shared_ptr<XBarMemWriteRespPacket>
+	 Construct_MemWriteRespPkt(const std::vector<XBarMemWriteRespPayload*>& beats,
+							   const std::string&                          src,
+							   const std::string&                          dst){
+		 int burstMode = (beats.size() == 1) ? 0
+											 : static_cast<int>(std::ceil(std::log2(beats.size())));
+ 
+		 size_t dst_idx = getIndex(dst);
+		 size_t src_idx = getIndex(src);
+
+		 return std::make_shared<XBarMemWriteRespPacket>(burstMode,
+														 beats,
+														 src_idx,
+														 dst_idx);
+	 }
 };
 
 #endif /* SOC_INCLUDE_MMIOUTIL_HH_ */

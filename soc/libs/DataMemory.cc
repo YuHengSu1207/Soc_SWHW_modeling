@@ -48,6 +48,19 @@ void DataMemory::memReadReqHandler(acalsim::Tick _when, XBarMemReadReqPayload* _
 	XBarMemReadRespPayload* memRespPkt =
 	    rc->acquire<XBarMemReadRespPayload>(&XBarMemReadRespPayload::renew, i, op, ret, a1);
 	memRespPkt->setTid(_memReqPkt->getTid());
+	
+	/* collect into BurstTracker ------------------------------------ */
+    auto& tk = pending_[memRespPkt->getTid()];
+    tk.expected = std::max(tk.expected, 1);   // single‑beat burst default
+    tk.rbeats.push_back(memRespPkt);
+
+    if ((int)tk.rbeats.size() == tk.expected) {
+        /*  assemble one XBarMemReadRespPacket ---------------------- */
+        std::vector<XBarMemReadRespPayload*> beats = std::move(tk.rbeats);
+        pending_.erase(memRespPkt->getTid());
+		auto respPtr = Construct_MemReadRespPkt(beats, _memReqPkt->getCaller() /*dst*/, 0 /*src*/);
+		respQ_.push(respPtr.get());
+    }
 	rc->recycle(_memReqPkt);
 }
 
@@ -87,5 +100,33 @@ void DataMemory::memWriteReqHandler(acalsim::Tick _when, XBarMemWriteReqPayload*
 	auto                     rc         = acalsim::top->getRecycleContainer();
 	XBarMemWriteRespPayload* memRespPkt = rc->acquire<XBarMemWriteRespPayload>(&XBarMemWriteRespPayload::renew, i);
 	memRespPkt->setTid(_memReqPkt->getTid());
+	
+	auto& tk = pending_[_memReqPkt->getTid()];
+    tk.expected = std::max(tk.expected, 1);
+    tk.wbeats.push_back(memRespPkt);
+
+    if ((int)tk.wbeats.size() == tk.expected) {
+        std::vector<XBarMemWriteRespPayload*> beats = std::move(tk.wbeats);
+        pending_.erase(memRespPkt->getTid());
+		auto respPtr = Construct_MemWriteRespPkt(beats, _memReqPkt->getCaller() /*dst*/, 0 /*src*/);
+		respQ_.push(respPtr.get());
+    }
 	rc->recycle(_memReqPkt);
 }
+
+/* ------------------------------------------------------------------ */
+/*  push if pipe‑reg accepts, else keep in queue                      */
+void DataMemory::trySendResponse()
+{
+    while (!respQ_.empty() && !m_reg->isStalled()) {
+        if (m_reg->push(respQ_.front())) {
+            respQ_.pop();
+        } else break;                       // back‑pressure
+    }
+}
+
+void DataMemory::masterPortRetry(const std::string&)
+{
+    trySendResponse();                      // called by framework when pipe un‑stalls
+}
+
