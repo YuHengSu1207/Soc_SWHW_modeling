@@ -11,8 +11,6 @@ void XBarMemWriteReqPacket::visit(acalsim::Tick _when, acalsim::SimBase& _simula
 	CLASS_INFO << "Cross Bar Packet handled!";
 }
 
-void XBarMemReadRespPacket::visit(acalsim::Tick when, acalsim::SimBase& simulator) {
-	
-}
+void XBarMemReadRespPacket::visit(acalsim::Tick when, acalsim::SimBase& simulator) {}
 
 void XBarMemWriteRespPacket::visit(acalsim::Tick when, acalsim::SimBase& simulator) {}

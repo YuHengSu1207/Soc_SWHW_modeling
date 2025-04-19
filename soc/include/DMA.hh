@@ -15,7 +15,7 @@
 class BusMemReadRespPacket;
 class BusMemWriteRespPacket;
 
-class DMAController : public acalsim::CPPSimBase , public MMIOUTIL {
+class DMAController : public acalsim::CPPSimBase, public MMIOUTIL {
 public:
 	DMAController(std::string _name) : acalsim::CPPSimBase(_name) {
 		LABELED_INFO(this->getName()) << "Constructing...";
@@ -24,8 +24,9 @@ public:
 
 	virtual ~DMAController() {}
 
-	void init() override { 
-		this->m_reg = this->getPipeRegister("bus-m");; 
+	void init() override {
+		this->m_reg = this->getPipeRegister("bus-m");
+		;
 	}
 
 	void registerSimPort() { this->s_port = this->addSlavePort("bus-s", 1); }
@@ -37,35 +38,29 @@ public:
 			if (s_port.second->isPopValid()) {
 				auto packet = s_port.second->pop();
 				// read req handling
-				if(auto ReadReqPkt = dynamic_cast<XBarMemReadReqPacket*>(packet)){
-					assert(ReadReqPkt->getPayloads().size() == ReadReqPkt->getBurstSize() && ReadReqPkt->getBurstSize() == 1);
-					auto payload = ReadReqPkt->getPayloads();	
-					acalsim::LambdaEvent<void()>* event =
-					new acalsim::LambdaEvent<void()>(
-						[this, payload]() {
-							this->readMMIO(acalsim::top->getGlobalTick() , payload[0]);
-						}
-					);
+				if (auto ReadReqPkt = dynamic_cast<XBarMemReadReqPacket*>(packet)) {
+					assert(ReadReqPkt->getPayloads().size() == ReadReqPkt->getBurstSize() &&
+					       ReadReqPkt->getBurstSize() == 1);
+					auto                          payload = ReadReqPkt->getPayloads();
+					acalsim::LambdaEvent<void()>* event   = new acalsim::LambdaEvent<void()>(
+                        [this, payload]() { this->readMMIO(acalsim::top->getGlobalTick(), payload[0]); });
 					this->scheduleEvent(event, acalsim::top->getGlobalTick());
 				}
 				// Write req handling
-				if(auto WriteReq = dynamic_cast<XBarMemWriteReqPacket*>(packet)){
+				if (auto WriteReq = dynamic_cast<XBarMemWriteReqPacket*>(packet)) {
 					assert(WriteReq->getPayloads().size() == WriteReq->getBurstSize() && WriteReq->getBurstSize() == 1);
-					auto payload = WriteReq->getPayloads();
-					acalsim::LambdaEvent<void()>* event =
-					new acalsim::LambdaEvent<void()>(
-						[this, payload]() {
-							this->writeMMIO(acalsim::top->getGlobalTick() , payload[0]);
-						}
-					);
+					auto                          payload = WriteReq->getPayloads();
+					acalsim::LambdaEvent<void()>* event   = new acalsim::LambdaEvent<void()>(
+                        [this, payload]() { this->writeMMIO(acalsim::top->getGlobalTick(), payload[0]); });
 					this->scheduleEvent(event, acalsim::top->getGlobalTick());
 				}
 				this->accept(acalsim::top->getGlobalTick(), *packet);
-				// expect to get the response at 
-				acalsim::LambdaEvent<void()>* event = new acalsim::LambdaEvent<void()>([this]() {this->trySendResponse();});
+				// expect to get the response at
+				acalsim::LambdaEvent<void()>* event =
+				    new acalsim::LambdaEvent<void()>([this]() { this->trySendResponse(); });
 				this->scheduleEvent(event, acalsim::top->getGlobalTick() + 1);
 			}
-		}	
+		}
 	}
 
 	void trySendResponse();
@@ -108,7 +103,7 @@ private:
 	void printBufferMem() const;
 
 private:
-	acalsim::SimPipeRegister* m_reg; // from addPRMasterPort("bus-m", ...)
+	acalsim::SimPipeRegister* m_reg;  // from addPRMasterPort("bus-m", ...)
 
 	// DMA registers
 	bool     enabled;
@@ -139,7 +134,7 @@ private:
 	enum class DmaState { IDLE, READING, WRITING } currentState;
 	// assembled response packets waiting for pipe‑reg
 	std::queue<acalsim::SimPacket*> CommandQ;
-	acalsim::SlavePort*       s_port;
+	acalsim::SlavePort*             s_port;
 };
 
 #endif  // SOC_INCLUDE_DMA_HH_

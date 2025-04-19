@@ -43,8 +43,8 @@ void DMAController::readMMIO(acalsim::Tick _when, XBarMemReadReqPayload* _memReq
 	    &XBarMemReadRespPayload::renew, _memReqPkt->getInstr(), _memReqPkt->getOP(), data, _memReqPkt->getA1());
 	respPkt->setTid(_memReqPkt->getTid());
 
-	std::vector<XBarMemReadRespPayload*> beats = {respPkt};
-	auto respPtr = Construct_MemReadRespPkt(beats, _memReqPkt->getCaller() , "dm");
+	std::vector<XBarMemReadRespPayload*> beats   = {respPkt};
+	auto                                 respPtr = Construct_MemReadRespPkt(beats, _memReqPkt->getCaller(), "dm");
 	CommandQ.push(respPtr.get());
 	rc->recycle(_memReqPkt);
 }
@@ -86,13 +86,11 @@ void DMAController::writeMMIO(acalsim::Tick _when, XBarMemWriteReqPayload* _memR
 	    rc->acquire<XBarMemWriteRespPayload>(&XBarMemWriteRespPayload::renew, _memReqPkt->getInstr());
 	respPkt->setTid(_memReqPkt->getTid());
 
-	std::vector<XBarMemWriteRespPayload*> beats = {respPkt};
-	auto respPtr = Construct_MemWriteRespPkt(beats, _memReqPkt->getCaller() , "dm");
+	std::vector<XBarMemWriteRespPayload*> beats   = {respPkt};
+	auto                                  respPtr = Construct_MemWriteRespPkt(beats, _memReqPkt->getCaller(), "dm");
 	CommandQ.push(respPtr.get());
 	rc->recycle(_memReqPkt);
 }
-
-
 
 /**
  * Initialize the transaction after the CPU sets ENABLE=1 via MMIO
@@ -172,7 +170,7 @@ void DMAController::scheduleReadsForBuffer() {
 		chunk = 2;  // resize the chunk to be supported by the burst mode
 	}
 	// Build read requests for exactly `chunk` words
-	auto                           rc  = acalsim::top->getRecycleContainer();
+	auto                                rc = acalsim::top->getRecycleContainer();
 	std::vector<XBarMemReadReqPayload*> readRequests;
 	readRequests.reserve(chunk);
 
@@ -192,7 +190,7 @@ void DMAController::scheduleReadsForBuffer() {
 		/*LABELED_INFO(this->getName()) << "Reading from address " << std::hex << address << " to bufferMemory["
 		                              << startIndex + i << "]";
 		LABELED_INFO(this->getName()) << "Reading from row " << row << " col " << col;*/
-		instr             dummyInstr;
+		instr                  dummyInstr;
 		XBarMemReadReqPayload* reqPkt =
 		    rc->acquire<XBarMemReadReqPayload>(&XBarMemReadReqPayload::renew, dummyInstr, LW, address, opnd);
 		readRequests.push_back(reqPkt);
@@ -205,7 +203,7 @@ void DMAController::scheduleReadsForBuffer() {
 	// LABELED_INFO(this->getName()) << "Scheduling " << chunk << " package size " << readRequests.size();
 	// Wrap them in a single BusMemReadReqPacket
 	auto XbarPkt = Construct_MemReadpkt_burst("dma", readRequests);
-	int tid = XbarPkt->getTransactionID();
+	int  tid     = XbarPkt->getTransactionID();
 	XbarPkt->setTransactionID(tid);
 
 	/* LABELED_INFO(this->getName()) << "Starting DMA read datamem to the bufferMemory " << startIndex << " to "
@@ -213,7 +211,7 @@ void DMAController::scheduleReadsForBuffer() {
 
 	auto m_port = this->getMasterPort(this->getName() + "-m");
 	if (!m_reg->isStalled() && m_reg->push(XbarPkt.get())) {
-		// good 
+		// good
 	} else {
 		this->CommandQ.push(XbarPkt.get());
 	}
@@ -314,9 +312,9 @@ void DMAController::scheduleWritesFromBuffer() {
 		XbarWriteReq->setTransactionID(tid);
 
 		if (!m_reg->isStalled() && m_reg->push(XbarWriteReq.get())) {
-		   // success
+			// success
 		} else {
-		   this->CommandQ.push(XbarWriteReq.get());
+			this->CommandQ.push(XbarWriteReq.get());
 		}
 
 		this->pendingBusWriteResponses++;
@@ -387,9 +385,7 @@ int DMAController::writeChunkCalculation(int word_offset, int original_chunk_siz
 void DMAController::masterPortRetry(const std::string& portName) {
 	// LABELED_INFO(this->getName()) << ": Master port retry at " << portName;
 	if (!this->CommandQ.empty() && !m_reg->isStalled()) {
-		if(m_reg->push(CommandQ.front())){
-			CommandQ.pop();
-		}
+		if (m_reg->push(CommandQ.front())) { CommandQ.pop(); }
 	}
 }
 
@@ -434,9 +430,10 @@ void DMAController::createWriteRequestsForChunk(size_t offset, size_t finalChunk
 /**
  * Helper that adds one SW request to outReqs
  */
-void DMAController::makeFullWritePacket(uint32_t address, uint32_t data, std::vector<XBarMemWriteReqPayload*>& outReqs) {
-	auto rc       = acalsim::top->getRecycleContainer();
-	instr              dummyInstr;
+void DMAController::makeFullWritePacket(uint32_t address, uint32_t data,
+                                        std::vector<XBarMemWriteReqPayload*>& outReqs) {
+	auto                    rc = acalsim::top->getRecycleContainer();
+	instr                   dummyInstr;
 	XBarMemWriteReqPayload* wrPkt =
 	    rc->acquire<XBarMemWriteReqPayload>(&XBarMemWriteReqPayload::renew, dummyInstr, SW, address, data);
 	outReqs.push_back(wrPkt);
@@ -447,29 +444,29 @@ void DMAController::makeFullWritePacket(uint32_t address, uint32_t data, std::ve
  */
 void DMAController::makePartialWritePackets(uint32_t address, uint32_t data, int byteCount,
                                             std::vector<XBarMemWriteReqPayload*>& outReqs) {
-	auto rc       = acalsim::top->getRecycleContainer();
+	auto  rc = acalsim::top->getRecycleContainer();
 	instr dummyInstr;
 
 	if (byteCount == 3) {
 		// Lower 2 bytes => SH
-		uint32_t           half = data & 0xFFFF;
+		uint32_t                half = data & 0xFFFF;
 		XBarMemWriteReqPayload* wrSH =
 		    rc->acquire<XBarMemWriteReqPayload>(&XBarMemWriteReqPayload::renew, dummyInstr, SH, address, half);
 		outReqs.push_back(wrSH);
 		// Next 1 byte => SB (the 3rd byte)
-		uint32_t           thirdByte = (data >> 16) & 0xFF;
+		uint32_t                thirdByte = (data >> 16) & 0xFF;
 		XBarMemWriteReqPayload* wrSB =
 		    rc->acquire<XBarMemWriteReqPayload>(&XBarMemWriteReqPayload::renew, dummyInstr, SB, address + 2, thirdByte);
 		outReqs.push_back(wrSB);
 	} else if (byteCount == 2) {
 		// Just SH
-		uint32_t           half = data & 0xFFFF;
+		uint32_t                half = data & 0xFFFF;
 		XBarMemWriteReqPayload* wrSH =
 		    rc->acquire<XBarMemWriteReqPayload>(&XBarMemWriteReqPayload::renew, dummyInstr, SH, address, half);
 		outReqs.push_back(wrSH);
 	} else if (byteCount == 1) {
 		// Just SB
-		uint32_t           oneByte = data & 0xFF;
+		uint32_t                oneByte = data & 0xFF;
 		XBarMemWriteReqPayload* wrSB =
 		    rc->acquire<XBarMemWriteReqPayload>(&XBarMemWriteReqPayload::renew, dummyInstr, SB, address, oneByte);
 		outReqs.push_back(wrSB);

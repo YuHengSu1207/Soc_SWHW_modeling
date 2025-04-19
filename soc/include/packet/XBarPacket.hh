@@ -100,10 +100,10 @@ public:
 		this->a1   = _a1;
 	}
 
-	void setTid(int _tid) { this->tid = _tid; }
-	int  getTid() const { return this->tid; }
-	std::string getCaller() const {return this->Caller;}
-	void setCaller(std::string _caller) {this->Caller = _caller;}
+	void         setTid(int _tid) { this->tid = _tid; }
+	int          getTid() const { return this->tid; }
+	std::string  getCaller() const { return this->Caller; }
+	void         setCaller(std::string _caller) { this->Caller = _caller; }
 	const instr& getInstr() const { return i; }
 	instr_type   getOP() const { return op; }
 	uint32_t     getAddr() const { return addr; }
@@ -111,11 +111,11 @@ public:
 
 private:
 	std::string Caller;
-	int        tid;
-	instr      i;
-	instr_type op;
-	uint32_t   addr;
-	operand    a1;
+	int         tid;
+	instr       i;
+	instr_type  op;
+	uint32_t    addr;
+	operand     a1;
 };
 
 class XBarMemWriteReqPayload : public acalsim::RecyclableObject {
@@ -132,10 +132,10 @@ public:
 		this->data = _data;
 	}
 
-	void setTid(int _tid) { this->tid = _tid; }
-	int  getTid() const { return this->tid; }
-	std::string getCaller() const {return this->Caller;}
-	void setCaller(std::string _caller) {this->Caller = _caller;}
+	void         setTid(int _tid) { this->tid = _tid; }
+	int          getTid() const { return this->tid; }
+	std::string  getCaller() const { return this->Caller; }
+	void         setCaller(std::string _caller) { this->Caller = _caller; }
 	const instr& getInstr() const { return i; }
 	instr_type   getOP() const { return op; }
 	uint32_t     getAddr() const { return addr; }
@@ -143,11 +143,11 @@ public:
 
 private:
 	std::string Caller;
-	int        tid;
-	instr      i;
-	instr_type op;
-	uint32_t   addr;
-	uint32_t   data;
+	int         tid;
+	instr       i;
+	instr_type  op;
+	uint32_t    addr;
+	uint32_t    data;
 };
 
 class XBarMemReadRespPayload : public acalsim::RecyclableObject {

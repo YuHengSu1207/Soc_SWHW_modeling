@@ -24,10 +24,10 @@
 #include "DataMemory.hh"
 #include "DataStruct.hh"
 #include "Emulator.hh"
+#include "MMIOUtil.hh"
 #include "packet/BusPacket.hh"
 #include "packet/CFUPacket.hh"
 #include "packet/MemPacket.hh"
-#include "MMIOUtil.hh"
 class BusMemWriteRespPacket;
 class BusMemReadRespPacket;
 
@@ -43,24 +43,24 @@ public:
 	 * @param _emulator Pointer to the ISA emulator
 	 */
 	CPU(std::string _name, Emulator* _emulator);
-	
+
 	void step() override {
 		for (auto s_port : this->s_ports_) {
 			if (s_port.second->isPopValid()) {
 				auto packet = s_port.second->pop();
 				// read req handling
-				if(auto ReadRespPkt = dynamic_cast<XBarMemReadRespPacket*>(packet)){
+				if (auto ReadRespPkt = dynamic_cast<XBarMemReadRespPacket*>(packet)) {
 					this->memReadBusRespHandler(ReadRespPkt);
 				}
 				// Write req handling
-				if(auto WriteRespPkt = dynamic_cast<XBarMemWriteRespPacket*>(packet)){
+				if (auto WriteRespPkt = dynamic_cast<XBarMemWriteRespPacket*>(packet)) {
 					this->memWriteBusRespHandler(WriteRespPkt);
 				}
 				this->accept(acalsim::top->getGlobalTick(), *packet);
 			}
 		}
 	}
-	
+
 	void init() override;
 	void cleanup() override;
 	void masterPortRetry(const std::string& portName) final;
@@ -173,9 +173,9 @@ private:
 	uint32_t  pc;           ///< Program counter
 	// the request queue
 	std::queue<acalsim::SimPacket*> request_queue;
-	acalsim::SimPipeRegister* m_reg;
-	acalsim::SlavePort*       s_port;
-	int   inst_cnt;  ///< Counter for executed instructions
+	acalsim::SimPipeRegister*       m_reg;
+	acalsim::SlavePort*             s_port;
+	int                             inst_cnt;  ///< Counter for executed instructions
 };
 
 #endif

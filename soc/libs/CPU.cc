@@ -166,31 +166,29 @@ bool CPU::BusMemRead(const instr& _i, instr_type _op, uint32_t _addr, operand _a
 	auto rc      = acalsim::top->getRecycleContainer();
 	int  latency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_read_latency");
 
-	auto Pkt = Construct_MemReadpkt_non_burst(_i, _op, _addr, _a1 , "cpu" , 1);
-	int tid = Pkt->getTransactionID();
+	auto Pkt        = Construct_MemReadpkt_non_burst(_i, _op, _addr, _a1, "cpu", 1);
+	int  tid        = Pkt->getTransactionID();
 	bool is_stalled = this->m_reg->isStalled();
 	if (!is_stalled && this->m_reg->push(Pkt.get())) {
 		LABELED_INFO(this->getName()) << "Send a read request to crosssbar";
 		// send packet instead of event trigger
-	}
-	else{
+	} else {
 		this->request_queue.push(Pkt.get());
 	}
 	return false;
 }
 
 bool CPU::BusmemWrite(const instr& _i, instr_type _op, uint32_t _addr, uint32_t _data) {
-	auto rc       = acalsim::top->getRecycleContainer();
-	int  latency  = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_write_latency");
-	
-	auto write_pkt = Construct_MemWritepkt_non_burst(_i , _op , _addr, _data, "cpu" , 1);
+	auto rc      = acalsim::top->getRecycleContainer();
+	int  latency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_write_latency");
+
+	auto write_pkt = Construct_MemWritepkt_non_burst(_i, _op, _addr, _data, "cpu", 1);
 	write_pkt->getTransactionID();
 	bool is_stalled = this->m_reg->isStalled();
 	if (!is_stalled && this->m_reg->push(write_pkt.get())) {
 		LABELED_INFO(this->getName()) << "Send a write request to bus";
 		// send packet instead of event trigger
-	}
-	else{
+	} else {
 		this->request_queue.push(write_pkt.get());
 	}
 	return false;
@@ -217,12 +215,10 @@ void CPU::masterPortRetry(const std::string& portName) {
 	if (!is_stalled) {
 		LABELED_INFO(this->getName()) << " send to the port";
 		if (auto read_req = dynamic_cast<XBarMemReadReqPacket*>(this->request_queue.front())) {
-			if(this->m_reg->push(read_req)){
-				this->request_queue.pop();
-			}
+			if (this->m_reg->push(read_req)) { this->request_queue.pop(); }
 		} else if (auto write_req = dynamic_cast<XBarMemWriteReqPacket*>(this->request_queue.front())) {
-			auto  real_req = write_req->getPayloads()[0];
-			if(this->m_reg->push(write_req)){
+			auto real_req = write_req->getPayloads()[0];
+			if (this->m_reg->push(write_req)) {
 				pc += 4;
 				commitInstr(real_req->getInstr());
 			}

@@ -17,8 +17,8 @@
 #ifndef SOC_INCLUDE_DATAMEMORY_HH_
 #define SOC_INCLUDE_DATAMEMORY_HH_
 
-#include <string>
 #include <queue>
+#include <string>
 #include <unordered_map>
 
 #include "ACALSim.hh"
@@ -34,7 +34,7 @@
  *          Inherits from SimModule for simulation functionality and BaseMemory
  *          for basic memory operations
  */
-class DataMemory : public acalsim::CPPSimBase, public BaseMemory, public MMIOUTIL{
+class DataMemory : public acalsim::CPPSimBase, public BaseMemory, public MMIOUTIL {
 public:
 	/**
 	 * @brief Constructor for DataMemory
@@ -44,7 +44,7 @@ public:
 	DataMemory(std::string _name, size_t _size) : acalsim::CPPSimBase(_name), BaseMemory(_size) {
 		LABELED_INFO(_name) << " Constructing";
 		/*     (CrossBarBuilder already connects PR \"Resp\",0 to dmem‘s *slave* side     */
-    	/*      so we expose a *master* for the opposite direction)                      */
+		/*      so we expose a *master* for the opposite direction)                      */
 		this->registerSimPort();
 	}
 	void registerSimPort() { this->s_port = this->addSlavePort("bus-s", 1); }
@@ -53,58 +53,50 @@ public:
 	 */
 	virtual ~DataMemory() {}
 
-	void init() override{
-		this->m_reg = this->getPipeRegister("bus-m");
-	};
+	void init() override { this->m_reg = this->getPipeRegister("bus-m"); };
 	void cleanup() override { ; };
 
 	void step() override {
 		for (auto s_port : this->s_ports_) {
 			if (s_port.second->isPopValid()) {
-				int burst_size = -1;
-				auto packet = s_port.second->pop();
+				int  burst_size = -1;
+				auto packet     = s_port.second->pop();
 				// read req handling
-				if(auto ReadReqPkt = dynamic_cast<XBarMemReadReqPacket*>(packet)){
+				if (auto ReadReqPkt = dynamic_cast<XBarMemReadReqPacket*>(packet)) {
 					assert(ReadReqPkt->getPayloads().size() == ReadReqPkt->getBurstSize());
-					auto payload = ReadReqPkt->getPayloads();
-					burst_size = payload.size();
+					auto payload                                            = ReadReqPkt->getPayloads();
+					burst_size                                              = payload.size();
 					this->pending_[ReadReqPkt->getTransactionID()].expected = payload.size();
-					for (int i = 1 ; i <= ReadReqPkt->getBurstSize() ; i++) {
-						auto payload = ReadReqPkt->getPayloads();
-						acalsim::LambdaEvent<void()>* event =
-						new acalsim::LambdaEvent<void()>(
-							[this, i, payload]() {
-								this->memReadReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
-							}
-						);
+					for (int i = 1; i <= ReadReqPkt->getBurstSize(); i++) {
+						auto                          payload = ReadReqPkt->getPayloads();
+						acalsim::LambdaEvent<void()>* event   = new acalsim::LambdaEvent<void()>([this, i, payload]() {
+                            this->memReadReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
+                        });
 						this->scheduleEvent(event, acalsim::top->getGlobalTick() + i);
 					}
 				}
 				// Write req handling
-				if(auto WriteReq = dynamic_cast<XBarMemWriteReqPacket*>(packet)){
+				if (auto WriteReq = dynamic_cast<XBarMemWriteReqPacket*>(packet)) {
 					assert(WriteReq->getPayloads().size() == WriteReq->getBurstSize());
-					auto payload = WriteReq->getPayloads();
-					burst_size = payload.size();
+					auto payload                                          = WriteReq->getPayloads();
+					burst_size                                            = payload.size();
 					this->pending_[WriteReq->getTransactionID()].expected = payload.size();
-					for (int i = 1 ; i <= WriteReq->getBurstSize() ; i++) {
-						auto payload = WriteReq->getPayloads();
-						acalsim::LambdaEvent<void()>* event =
-						new acalsim::LambdaEvent<void()>(
-							[this, i, payload]() {
-								this->memWriteReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
-							}
-						);
+					for (int i = 1; i <= WriteReq->getBurstSize(); i++) {
+						auto                          payload = WriteReq->getPayloads();
+						acalsim::LambdaEvent<void()>* event   = new acalsim::LambdaEvent<void()>([this, i, payload]() {
+                            this->memWriteReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
+                        });
 						this->scheduleEvent(event, acalsim::top->getGlobalTick() + i);
 					}
 				}
 				this->accept(acalsim::top->getGlobalTick(), *packet);
 
-				// expect to get the response at 
-				acalsim::LambdaEvent<void()>* event = new acalsim::LambdaEvent<void()>([this]() {this->trySendResponse();});
+				// expect to get the response at
+				acalsim::LambdaEvent<void()>* event =
+				    new acalsim::LambdaEvent<void()>([this]() { this->trySendResponse(); });
 				this->scheduleEvent(event, acalsim::top->getGlobalTick() + burst_size + 1);
 			}
 		}
-		
 	}
 
 	void masterPortRetry(const std::string& portName) final;
@@ -126,26 +118,24 @@ public:
 	void memWriteReqHandler(acalsim::Tick _when, XBarMemWriteReqPayload* _memReqPkt);
 
 private:
-    /* ---------- internal helpers ------------ */
-    void trySendResponse();               // pushes one packet if pipe‑reg ready
+	/* ---------- internal helpers ------------ */
+	void trySendResponse();  // pushes one packet if pipe‑reg ready
 
-    struct BurstTracker {
-        int                                expected;   // burstLen
-        std::vector<XBarMemReadRespPayload*>  rbeats;
-        std::vector<XBarMemWriteRespPayload*> wbeats;
-    };
+	struct BurstTracker {
+		int                                   expected;  // burstLen
+		std::vector<XBarMemReadRespPayload*>  rbeats;
+		std::vector<XBarMemWriteRespPayload*> wbeats;
+	};
 
-    /* ---------- state ------------ */
+	/* ---------- state ------------ */
 
-	acalsim::SimPipeRegister* m_reg; // from addPRMasterPort("bus-m", ...)
+	acalsim::SimPipeRegister* m_reg;  // from addPRMasterPort("bus-m", ...)
 	acalsim::SlavePort*       s_port;
-    // tid -> tracker
-    std::unordered_map<int/*tid*/,BurstTracker> pending_;
+	// tid -> tracker
+	std::unordered_map<int /*tid*/, BurstTracker> pending_;
 
-    // assembled response packets waiting for pipe‑reg
-    std::queue<acalsim::SimPacket*> respQ_;
-
-
+	// assembled response packets waiting for pipe‑reg
+	std::queue<acalsim::SimPacket*> respQ_;
 };
 
 #endif
