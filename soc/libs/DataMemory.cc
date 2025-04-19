@@ -108,7 +108,7 @@ void DataMemory::memWriteReqHandler(acalsim::Tick _when, XBarMemWriteReqPayload*
 	if ((int)tk.wbeats.size() == tk.expected) {
 		std::vector<XBarMemWriteRespPayload*> beats = std::move(tk.wbeats);
 		pending_.erase(memRespPkt->getTid());
-		auto respPtr = Construct_MemWriteRespPkt(beats, _memReqPkt->getCaller() /*dst*/, 0 /*src*/);
+		auto respPtr = Construct_MemWriteRespPkt(beats, _memReqPkt->getCaller(), "dm");
 		respQ_.push(respPtr.get());
 	}
 	rc->recycle(_memReqPkt);

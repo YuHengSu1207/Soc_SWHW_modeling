@@ -22,7 +22,6 @@
 #include "DataMemory.hh"
 #include "TraceRecord.hh"
 #include "event/ExecOneInstrEvent.hh"
-#include "event/MemReqEvent.hh"
 
 CPU::CPU(std::string _name, Emulator* _emulator)
     : acalsim::CPPSimBase(_name), pc(0), inst_cnt(0), isaEmulator(_emulator) {
@@ -278,8 +277,8 @@ void CPU::printRegfile() const {
 }
 
 void CPU::dumpMemory() {
-	AXIBus*     bus = dynamic_cast<AXIBus*>(this->getDownStream("DSBus"));
-	DataMemory* dm  = dynamic_cast<DataMemory*>(bus->getDownStream("DSDMem"));
+	acalsim::crossbar::CrossBar* Xbar = dynamic_cast<acalsim::crossbar::CrossBar*>(this->getDownStream("DSBus"));
+	DataMemory*                  dm   = dynamic_cast<DataMemory*>(Xbar->getDownStream("DSDMem"));
 	// Open output file
 	std::ofstream outFile("memory_dump.txt");
 	if (!outFile) {

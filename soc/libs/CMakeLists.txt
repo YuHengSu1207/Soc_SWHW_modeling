@@ -30,17 +30,13 @@ set(APP_LIB_NAME soc)
 set(LIBS_SRCS
     CPU.cc
     event/ExecOneInstrEvent.cc
-    event/MemReqEvent.cc
-    event/BusTransactionEvent.cc
-    packet/MemPacket.cc
-    packet/BusPacket.cc
+    packet/XBarPacket.cc
     packet/CFUPacket.cc
     BaseMemory.cc
     DataMemory.cc
     DMA.cc
     Emulator.cc
     SOC.cc
-    Bus.cc
     CFU.cc
 )
 # ##########################################################################

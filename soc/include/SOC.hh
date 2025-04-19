@@ -27,7 +27,6 @@
 #include <memory>
 
 #include "ACALSim.hh"
-#include "Bus.hh"
 #include "CFU.hh"
 #include "CPU.hh"
 #include "DMA.hh"
@@ -141,15 +140,15 @@ public:
 		this->dma->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 2));
 
 		for (auto mp : XBar->getMasterPortsBySlave("Resp", 0)) {
-			acalsim::SimPortManager::ConnectPort(bus, this->dmem, mp->getName(), "bus-s");
+			acalsim::SimPortManager::ConnectPort(XBar, this->dmem, mp->getName(), "bus-s");
 		}
 
 		for (auto mp : XBar->getMasterPortsBySlave("Resp", 1)) {
-			acalsim::SimPortManager::ConnectPort(bus, this->dma, mp->getName(), "bus-s");
+			acalsim::SimPortManager::ConnectPort(XBar, this->dma, mp->getName(), "bus-s");
 		}
 
 		for (auto mp : XBar->getMasterPortsBySlave("Resp", 2)) {
-			acalsim::SimPortManager::ConnectPort(bus, this->cpu, mp->getName(), "bus-s");
+			acalsim::SimPortManager::ConnectPort(XBar, this->cpu, mp->getName(), "bus-s");
 		}
 
 		// channel cpu <-> cfu
@@ -185,7 +184,6 @@ private:
 	Emulator*                    isaEmulator;  ///< ISA behavior model for instruction emulation
 	CPU*                         cpu;          ///< Single-cycle CPU hardware model
 	DataMemory*                  dmem;         ///< Data memory subsystem model
-	AXIBus*                      bus;          // bus support
 	DMAController*               dma;          ///< DMA controller for data transfer
 	CFU*                         cfu;
 	acalsim::crossbar::CrossBar* XBar;

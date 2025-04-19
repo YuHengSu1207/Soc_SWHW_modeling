@@ -2,7 +2,6 @@
 
 #include <cmath>
 
-#include "Bus.hh"
 #include "DataMemory.hh"
 #include "TraceRecord.hh"
 #define BUFFER_CAPACITY 256
@@ -222,11 +221,11 @@ void DMAController::scheduleReadsForBuffer() {
 /**
  * Once the entire burst completes, the bus calls this method.
  */
-void DMAController::handleReadResponse(BusMemReadRespPacket* pkt) {
+void DMAController::handleReadResponse(XBarMemReadRespPacket* pkt) {
 	// LABELED_INFO(this->getName()) << " receive resp and write to the bufferMemory for tid: " <<
 	this->just_get_resp = true;
 	auto rc             = acalsim::top->getRecycleContainer();
-	auto readResponses  = pkt->getMemReadRespPkt();
+	auto readResponses  = pkt->getPayloads();
 
 	// Insert data into bufferMemory
 	for (auto* rresp : readResponses) {
@@ -292,9 +291,8 @@ void DMAController::scheduleWritesFromBuffer() {
 	size_t burst_size_words        = (size_t)std::pow(2, this->max_burst_len);  // e.g. 4 => 16 bytes
 	this->pendingBusWriteResponses = 0;
 
-	size_t  offset       = 0;
-	size_t  chunkCounter = 0;  // We'll increment this for each burst, so each is scheduled 1 cycle apart
-	AXIBus* bus          = dynamic_cast<AXIBus*>(this->getDownStream("DSBus"));
+	size_t offset       = 0;
+	size_t chunkCounter = 0;  // We'll increment this for each burst, so each is scheduled 1 cycle apart
 
 	while (offset < wordsToWrite) {
 		// 1) Decide how many words we can send in this burst
@@ -479,11 +477,11 @@ void DMAController::makePartialWritePackets(uint32_t address, uint32_t data, int
 /**
  * Called once one entire BusMemWriteReqPacket has completed.
  */
-void DMAController::handleWriteCompletion(BusMemWriteRespPacket* pkt) {
+void DMAController::handleWriteCompletion(XBarMemWriteRespPacket* pkt) {
 	// LABELED_INFO(this->getName()) << "DMA write response received with tid " << pkt->getTransactionID();
-	auto rc = acalsim::top->getRecycleContainer();
+	auto rc  = acalsim::top->getRecycleContainer();
+	int  tid = pkt->getTransactionID();
 	rc->recycle(pkt);
-	int tid = pkt->getTransactionID();
 
 	this->pendingBusWriteResponses--;
 	if (this->pendingBusWriteResponses == 0) {

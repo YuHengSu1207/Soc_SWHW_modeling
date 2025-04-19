@@ -25,9 +25,7 @@
 #include "DataStruct.hh"
 #include "Emulator.hh"
 #include "MMIOUtil.hh"
-#include "packet/BusPacket.hh"
 #include "packet/CFUPacket.hh"
-#include "packet/MemPacket.hh"
 class BusMemWriteRespPacket;
 class BusMemReadRespPacket;
 

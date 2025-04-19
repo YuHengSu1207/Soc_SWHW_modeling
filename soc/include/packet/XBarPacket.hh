@@ -1,7 +1,7 @@
 #ifndef SOC_INCLUDE_XBAR_PACKET_HH_
 #define SOC_INCLUDE_XBAR_PACKET_HH_
 #include "ACALSim.hh"
-
+#include "DataStruct.hh"
 // forward class
 class XBarMemReadReqPayload;
 class XBarMemWriteReqPayload;
@@ -52,7 +52,7 @@ public:
 	std::vector<PayloadType*> getPayloads() const { return payloadList; }
 
 	void visit(acalsim::Tick when, acalsim::SimModule& module) override {}
-	void visit(acalsim::Tick when, acalsim::SimBase& simulator) override;
+	void visit(acalsim::Tick when, acalsim::SimBase& simulator) override{};
 
 private:
 	std::vector<PayloadType*> payloadList;
@@ -61,29 +61,21 @@ private:
 class XBarMemReadReqPacket : public XBarMemPacket<XBarMemReadReqPayload> {
 public:
 	using XBarMemPacket<XBarMemReadReqPayload>::XBarMemPacket;
-
-	void visit(acalsim::Tick when, acalsim::SimBase& simulator) override;
 };
 
 class XBarMemWriteReqPacket : public XBarMemPacket<XBarMemWriteReqPayload> {
 public:
 	using XBarMemPacket<XBarMemWriteReqPayload>::XBarMemPacket;
-
-	void visit(acalsim::Tick when, acalsim::SimBase& simulator) override;
 };
 
 class XBarMemReadRespPacket : public XBarMemPacket<XBarMemReadRespPayload> {
 public:
 	using XBarMemPacket<XBarMemReadRespPayload>::XBarMemPacket;
-
-	void visit(acalsim::Tick when, acalsim::SimBase& simulator) override;
 };
 
 class XBarMemWriteRespPacket : public XBarMemPacket<XBarMemWriteRespPayload> {
 public:
 	using XBarMemPacket<XBarMemWriteRespPayload>::XBarMemPacket;
-
-	void visit(acalsim::Tick when, acalsim::SimBase& simulator) override;
 };
 
 class XBarMemReadReqPayload : public acalsim::RecyclableObject {

@@ -5,15 +5,9 @@
 #include <vector>
 
 #include "ACALSim.hh"
-#include "Bus.hh"
 #include "DataMemory.hh"
 #include "MMIOUtil.hh"
-#include "event/BusTransactionEvent.hh"
-#include "event/MemReqEvent.hh"
 #include "packet/XBarPacket.hh"
-
-class BusMemReadRespPacket;
-class BusMemWriteRespPacket;
 
 class DMAController : public acalsim::CPPSimBase, public MMIOUTIL {
 public:
@@ -63,7 +57,7 @@ public:
 		}
 	}
 
-	void trySendResponse();
+	void trySendResponse() { std::cout << "[TODO]"; };
 
 	void masterPortRetry(const std::string& portName) final;
 
@@ -74,8 +68,8 @@ public:
 	/*
 	Response handler
 	*/
-	void handleReadResponse(BusMemReadRespPacket* pkt);
-	void handleWriteCompletion(BusMemWriteRespPacket* pkt);
+	void handleReadResponse(XBarMemReadRespPacket* pkt);
+	void handleWriteCompletion(XBarMemWriteRespPacket* pkt);
 	// Called after writing ENABLE=1 in your MMIO register
 	void initialized_transaction();
 
