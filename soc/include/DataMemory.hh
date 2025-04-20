@@ -47,7 +47,7 @@ public:
 		/*      so we expose a *master* for the opposite direction)                      */
 		this->registerSimPort();
 	}
-	void registerSimPort() { this->s_port = this->addSlavePort("bus-s", 1); }
+	void registerSimPort() { this->addSlavePort("bus-s", 1); }
 	/**
 	 * @brief Virtual destructor
 	 */
@@ -57,40 +57,55 @@ public:
 	void cleanup() override { ; };
 
 	void step() override {
+		if (!respQ_.empty()) { this->trySendResponse(); }
+
 		for (auto s_port : this->s_ports_) {
+			CLASS_INFO << s_port.first;
 			if (s_port.second->isPopValid()) {
+				CLASS_INFO << "Is pop valid";
 				int  burst_size = -1;
 				auto packet     = s_port.second->pop();
 				// read req handling
 				if (auto ReadReqPkt = dynamic_cast<XBarMemReadReqPacket*>(packet)) {
 					assert(ReadReqPkt->getPayloads().size() == ReadReqPkt->getBurstSize());
-					auto payload                                            = ReadReqPkt->getPayloads();
-					burst_size                                              = payload.size();
-					this->pending_[ReadReqPkt->getTransactionID()].expected = payload.size();
-					for (int i = 1; i <= ReadReqPkt->getBurstSize(); i++) {
-						auto                          payload = ReadReqPkt->getPayloads();
-						acalsim::LambdaEvent<void()>* event   = new acalsim::LambdaEvent<void()>([this, i, payload]() {
-                            this->memReadReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
-                        });
-						this->scheduleEvent(event, acalsim::top->getGlobalTick() + i);
+					auto payload = ReadReqPkt->getPayloads();
+					burst_size   = payload.size();
+					CLASS_INFO << "[DMEM] : pop a read packet : " << ReadReqPkt->getAutoIncTID()
+					           << " with burst size : " << burst_size;
+					this->pending_[ReadReqPkt->getAutoIncTID()].expected = payload.size();
+					this->memReadReqHandler(acalsim::top->getGlobalTick(),
+					                        payload[0]);  // handle the first read immediately.
+					if (burst_size != 1) {
+						for (int i = 1; i < ReadReqPkt->getBurstSize(); i++) {
+							auto                          payload = ReadReqPkt->getPayloads();
+							acalsim::LambdaEvent<void()>* event =
+							    new acalsim::LambdaEvent<void()>([this, i, payload]() {
+								    this->memReadReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
+							    });
+							this->scheduleEvent(event, acalsim::top->getGlobalTick() + i);
+						}
 					}
 				}
 				// Write req handling
 				if (auto WriteReq = dynamic_cast<XBarMemWriteReqPacket*>(packet)) {
 					assert(WriteReq->getPayloads().size() == WriteReq->getBurstSize());
-					auto payload                                          = WriteReq->getPayloads();
-					burst_size                                            = payload.size();
-					this->pending_[WriteReq->getTransactionID()].expected = payload.size();
-					for (int i = 1; i <= WriteReq->getBurstSize(); i++) {
-						auto                          payload = WriteReq->getPayloads();
-						acalsim::LambdaEvent<void()>* event   = new acalsim::LambdaEvent<void()>([this, i, payload]() {
-                            this->memWriteReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
-                        });
-						this->scheduleEvent(event, acalsim::top->getGlobalTick() + i);
+					auto payload = WriteReq->getPayloads();
+					burst_size   = payload.size();
+					CLASS_INFO << "[DMEM] : pop a write packet: " << WriteReq->getAutoIncTID() << " with size "
+					           << burst_size;
+					this->pending_[WriteReq->getAutoIncTID()].expected = payload.size();
+					this->memWriteReqHandler(acalsim::top->getGlobalTick(), payload[0]);
+					if (burst_size != 1) {
+						for (int i = 1; i < WriteReq->getBurstSize(); i++) {
+							auto                          payload = WriteReq->getPayloads();
+							acalsim::LambdaEvent<void()>* event =
+							    new acalsim::LambdaEvent<void()>([this, i, payload]() {
+								    this->memWriteReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
+							    });
+							this->scheduleEvent(event, acalsim::top->getGlobalTick() + i);
+						}
 					}
 				}
-				this->accept(acalsim::top->getGlobalTick(), *packet);
-
 				// expect to get the response at
 				acalsim::LambdaEvent<void()>* event =
 				    new acalsim::LambdaEvent<void()>([this]() { this->trySendResponse(); });
@@ -130,7 +145,6 @@ private:
 	/* ---------- state ------------ */
 
 	acalsim::SimPipeRegister* m_reg;  // from addPRMasterPort("bus-m", ...)
-	acalsim::SlavePort*       s_port;
 	// tid -> tracker
 	std::unordered_map<int /*tid*/, BurstTracker> pending_;
 

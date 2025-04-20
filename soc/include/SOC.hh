@@ -83,7 +83,7 @@ public:
 		// Data Memory Timing Model
 		this->dmem = new DataMemory("DataMemory", mem_size);
 		// XBar
-		this->XBar = new acalsim::crossbar::CrossBar("CrossBar", 2, 3);
+		this->XBar = new acalsim::crossbar::CrossBar("CrossBar", 2, 1);
 
 		// Instruction Set Architecture Emulator (Functional Model)
 		this->isaEmulator = new Emulator("RISCV RV32I Emulator");
@@ -119,36 +119,24 @@ public:
 		this->cpu->addDownStream(this->cfu, "DSCFU");
 		this->cfu->addUpStream(this->cpu, "USCPU");
 
-		// connect ports cpu -> bus
-		// connect ports dma -> bus
+		// master construction (cpu, dma)
+		// Register PRMasterPort to Masters in `SimTop`
 		this->cpu->addPRMasterPort("bus-m", XBar->getPipeRegister("Req", 0));
 		this->dma->addPRMasterPort("bus-m", XBar->getPipeRegister("Req", 1));
-
+		// Make SimPort Connection to Slaves in `SimTop`
 		for (auto mp : XBar->getMasterPortsBySlave("Req", 0)) {
-			acalsim::SimPortManager::ConnectPort(XBar, this->cpu, mp->getName(), "bus-s");
-		}
-
-		for (auto mp : XBar->getMasterPortsBySlave("Req", 1)) {
-			acalsim::SimPortManager::ConnectPort(XBar, this->dma, mp->getName(), "bus-s");
-		}
-
-		// connect channel bus -> dm
-		// connect channel bus -> dma
-		// connect channel bus -> cpu
-		this->cpu->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 0));
-		this->dmem->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 1));
-		this->dma->addPRSlavePort("bus-m", XBar->getPipeRegister("Resp", 2));
-
-		for (auto mp : XBar->getMasterPortsBySlave("Resp", 0)) {
 			acalsim::SimPortManager::ConnectPort(XBar, this->dmem, mp->getName(), "bus-s");
 		}
 
+		// slave construction (dm)
+		// Register PRMasterPort to Slaves for the response channel
+		this->dmem->addPRMasterPort("bus-m", XBar->getPipeRegister("Resp", 0));
+		// Simport Connection (Bus <> SlavePort at Devices)
+		for (auto mp : XBar->getMasterPortsBySlave("Resp", 0)) {
+			acalsim::SimPortManager::ConnectPort(XBar, this->cpu, mp->getName(), "bus-s");
+		}
 		for (auto mp : XBar->getMasterPortsBySlave("Resp", 1)) {
 			acalsim::SimPortManager::ConnectPort(XBar, this->dma, mp->getName(), "bus-s");
-		}
-
-		for (auto mp : XBar->getMasterPortsBySlave("Resp", 2)) {
-			acalsim::SimPortManager::ConnectPort(XBar, this->cpu, mp->getName(), "bus-s");
 		}
 
 		// channel cpu <-> cfu

@@ -58,8 +58,9 @@ void DataMemory::memReadReqHandler(acalsim::Tick _when, XBarMemReadReqPayload* _
 		/*  assemble one XBarMemReadRespPacket ---------------------- */
 		std::vector<XBarMemReadRespPayload*> beats = std::move(tk.rbeats);
 		pending_.erase(memRespPkt->getTid());
-		auto respPtr = Construct_MemReadRespPkt(beats, _memReqPkt->getCaller() /*dst*/, 0 /*src*/);
-		respQ_.push(respPtr.get());
+		auto respPtr = Construct_MemReadRespPkt(beats, "dm" /*src*/, _memReqPkt->getCaller() /*dst*/);
+		respPtr->setTID(_memReqPkt->getTid());
+		respQ_.push(respPtr);
 	}
 	rc->recycle(_memReqPkt);
 }
@@ -108,8 +109,9 @@ void DataMemory::memWriteReqHandler(acalsim::Tick _when, XBarMemWriteReqPayload*
 	if ((int)tk.wbeats.size() == tk.expected) {
 		std::vector<XBarMemWriteRespPayload*> beats = std::move(tk.wbeats);
 		pending_.erase(memRespPkt->getTid());
-		auto respPtr = Construct_MemWriteRespPkt(beats, _memReqPkt->getCaller(), "dm");
-		respQ_.push(respPtr.get());
+		auto respPtr = Construct_MemWriteRespPkt(beats, "dm" /*src*/, _memReqPkt->getCaller() /*dst*/);
+		respPtr->setTID(_memReqPkt->getTid());
+		respQ_.push(respPtr);
 	}
 	rc->recycle(_memReqPkt);
 }
@@ -117,11 +119,16 @@ void DataMemory::memWriteReqHandler(acalsim::Tick _when, XBarMemWriteReqPayload*
 /* ------------------------------------------------------------------ */
 /*  push if pipe‑reg accepts, else keep in queue                      */
 void DataMemory::trySendResponse() {
-	while (!respQ_.empty() && !m_reg->isStalled()) {
-		if (m_reg->push(respQ_.front())) {
-			respQ_.pop();
-		} else
-			break;  // back‑pressure
+	if (!respQ_.empty()) {
+		if (!m_reg->isStalled()) {
+			if (m_reg->push(respQ_.front())) {
+				CLASS_INFO << "[DATAMEM] : send packet back";
+				respQ_.pop();
+			}
+		} else {
+			// force to move
+			this->forceStepInNextIteration();
+		}
 	}
 }
 

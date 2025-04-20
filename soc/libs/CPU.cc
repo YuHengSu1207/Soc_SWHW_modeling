@@ -26,11 +26,11 @@
 CPU::CPU(std::string _name, Emulator* _emulator)
     : acalsim::CPPSimBase(_name), pc(0), inst_cnt(0), isaEmulator(_emulator) {
 	this->registerSimPort();
-	LABELED_INFO(name) << "CPU::init() - is connected to PR:" << this->m_reg->getName();
 }
 
 void CPU::init() {
 	this->m_reg = this->getPipeRegister("bus-m");
+	LABELED_INFO(name) << "CPU::init() - is connected to PR:" << this->m_reg->getName();
 	// Inject trigger event
 	auto data_offset = acalsim::top->getParameter<int>("Emulator", "data_offset");
 	this->imem       = new instr[data_offset / 4];
@@ -149,8 +149,8 @@ void CPU::processInstr(const instr& _i) {
 }
 
 void CPU::commitInstr(const instr& _i) {
-	/*CLASS_INFO << "Instruction " << this->instrToString(_i.op)
-	           << " is completed at Tick = " << acalsim::top->getGlobalTick() << " | PC = " << this->pc;*/
+	CLASS_INFO << "Instruction " << this->instrToString(_i.op)
+	           << " is completed at Tick = " << acalsim::top->getGlobalTick() << " | PC = " << this->pc;
 
 	if (_i.op == HCF) return;
 
@@ -165,14 +165,18 @@ bool CPU::BusMemRead(const instr& _i, instr_type _op, uint32_t _addr, operand _a
 	auto rc      = acalsim::top->getRecycleContainer();
 	int  latency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_read_latency");
 
-	auto Pkt        = Construct_MemReadpkt_non_burst(_i, _op, _addr, _a1, "cpu", 1);
-	int  tid        = Pkt->getTransactionID();
+	auto Pkt = Construct_MemReadpkt_non_burst(_i, _op, _addr, _a1, "cpu");
+
 	bool is_stalled = this->m_reg->isStalled();
-	if (!is_stalled && this->m_reg->push(Pkt.get())) {
+	if (!dynamic_cast<acalsim::crossbar::CrossBarPacket*>(Pkt)) {
+		CLASS_ERROR << "Failed to convert that into the CrossBarPacket";
+	}
+	if (!is_stalled && this->m_reg->push(static_cast<acalsim::crossbar::CrossBarPacket*>(Pkt))) {
+		this->forceStepInNextIteration();
 		LABELED_INFO(this->getName()) << "Send a read request to crosssbar";
 		// send packet instead of event trigger
 	} else {
-		this->request_queue.push(Pkt.get());
+		this->request_queue.push(Pkt);
 	}
 	return false;
 }
@@ -181,14 +185,18 @@ bool CPU::BusmemWrite(const instr& _i, instr_type _op, uint32_t _addr, uint32_t 
 	auto rc      = acalsim::top->getRecycleContainer();
 	int  latency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_write_latency");
 
-	auto write_pkt = Construct_MemWritepkt_non_burst(_i, _op, _addr, _data, "cpu", 1);
-	write_pkt->getTransactionID();
+	auto Pkt = Construct_MemWritepkt_non_burst(_i, _op, _addr, _data, "cpu");
+
 	bool is_stalled = this->m_reg->isStalled();
-	if (!is_stalled && this->m_reg->push(write_pkt.get())) {
+	if (!dynamic_cast<acalsim::crossbar::CrossBarPacket*>(Pkt)) {
+		CLASS_ERROR << "Failed to convert that into the CrossBarPacket";
+	}
+	if (!is_stalled && this->m_reg->push(Pkt)) {
 		LABELED_INFO(this->getName()) << "Send a write request to bus";
-		// send packet instead of event trigger
+		this->forceStepInNextIteration();
+		return true;
 	} else {
-		this->request_queue.push(write_pkt.get());
+		this->request_queue.push(Pkt);
 	}
 	return false;
 }
@@ -227,17 +235,17 @@ void CPU::masterPortRetry(const std::string& portName) {
 	}
 }
 
-void CPU::memReadBusRespHandler(XBarMemReadRespPacket* _pkt) {
+void CPU::memReadXBarRespHandler(XBarMemReadRespPacket* _pkt) {
 	auto memPackets = _pkt->getPayloads();
 	for (auto& memPkt : memPackets) { this->memReadRespHandler(memPkt); }
-	int tid = _pkt->getTransactionID();
+	int tid = _pkt->getAutoIncTID();
 	acalsim::top->getRecycleContainer()->recycle(_pkt);
 }
 
-void CPU::memWriteBusRespHandler(XBarMemWriteRespPacket* _pkt) {
-	// LABELED_INFO(this->getName()) << "CPU finish write transaction" << _pkt->getTransactionID();
+void CPU::memWriteXBarRespHandler(XBarMemWriteRespPacket* _pkt) {
+	// LABELED_INFO(this->getName()) << "CPU finish write transaction" << _pkt->getAutoIncTID();
 	auto memPackets = _pkt->getPayloads();
-	int  tid        = _pkt->getTransactionID();
+	int  tid        = _pkt->getAutoIncTID();
 }
 
 void CPU::memReadRespHandler(XBarMemReadRespPayload* _pkt) {

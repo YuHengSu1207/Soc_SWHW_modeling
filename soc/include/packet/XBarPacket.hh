@@ -12,12 +12,12 @@ class BurstModeBusPacket {
 public:
 	/** @brief Constructor that initializes burst mode and assigns a unique TransactionID */
 	explicit BurstModeBusPacket(int burstMode = 0, std::string caller = "IDK")
-	    : burstSize(pow(2, burstMode)), burstLength(burstMode), TransactionID(0), Caller(caller) {}
+	    : burstSize(pow(2, burstMode)), burstLength(burstMode), Caller(caller) {}
 
 	int         getBurstLen() const { return burstLength; }
 	int         getBurstSize() const { return burstSize; }
-	int         getTransactionID() const { return TransactionID; }
-	void        setTransactionID(int tid) { TransactionID = tid; }
+	int         getAutoIncTID() const { return TransactionID; }
+	void        setTID(int tid) { TransactionID = tid; }
 	std::string getCallerName() const { return Caller; }
 	static int  generateTransactionID() {
         static std::atomic<int> transactionCounter{0};  // Atomic counter for thread safety
@@ -41,12 +41,13 @@ public:
 
 	~XBarMemPacket() override = default;
 
-	void renew(int burstMode, const std::vector<PayloadType*>& payloads, size_t src_idx = 0, size_t dst_idx = 0) {
+	void renew(int burstMode, const std::vector<PayloadType*>& payloads, size_t src_idx = 0, size_t dst_idx = 0,
+	           bool required_new_tid = false) {
 		this->acalsim::crossbar::CrossBarPacket::renew(src_idx, dst_idx);
-		this->burstLength   = burstMode;
-		this->burstSize     = std::pow(2, burstMode);
-		this->payloadList   = payloads;
-		this->TransactionID = generateTransactionID();
+		this->burstLength = burstMode;
+		this->burstSize   = std::pow(2, burstMode);
+		this->payloadList = payloads;
+		if (required_new_tid) { this->TransactionID = generateTransactionID(); }
 	}
 
 	std::vector<PayloadType*> getPayloads() const { return payloadList; }
@@ -61,21 +62,37 @@ private:
 class XBarMemReadReqPacket : public XBarMemPacket<XBarMemReadReqPayload> {
 public:
 	using XBarMemPacket<XBarMemReadReqPayload>::XBarMemPacket;
+	void renew(int burstMode, const std::vector<XBarMemReadReqPayload*>& payloads, size_t src_idx = 0,
+	           size_t dst_idx = 0, bool required_new_tid = false) {
+		XBarMemPacket<XBarMemReadReqPayload>::renew(burstMode, payloads, src_idx, dst_idx, required_new_tid);
+	}
 };
 
 class XBarMemWriteReqPacket : public XBarMemPacket<XBarMemWriteReqPayload> {
 public:
 	using XBarMemPacket<XBarMemWriteReqPayload>::XBarMemPacket;
+	void renew(int burstMode, const std::vector<XBarMemWriteReqPayload*>& payloads, size_t src_idx = 0,
+	           size_t dst_idx = 0, bool required_new_tid = false) {
+		XBarMemPacket<XBarMemWriteReqPayload>::renew(burstMode, payloads, src_idx, dst_idx, required_new_tid);
+	}
 };
 
 class XBarMemReadRespPacket : public XBarMemPacket<XBarMemReadRespPayload> {
 public:
 	using XBarMemPacket<XBarMemReadRespPayload>::XBarMemPacket;
+	void renew(int burstMode, const std::vector<XBarMemReadRespPayload*>& payloads, size_t src_idx = 0,
+	           size_t dst_idx = 0, bool required_new_tid = false) {
+		XBarMemPacket<XBarMemReadRespPayload>::renew(burstMode, payloads, src_idx, dst_idx, required_new_tid);
+	}
 };
 
 class XBarMemWriteRespPacket : public XBarMemPacket<XBarMemWriteRespPayload> {
 public:
 	using XBarMemPacket<XBarMemWriteRespPayload>::XBarMemPacket;
+	void renew(int burstMode, const std::vector<XBarMemWriteRespPayload*>& payloads, size_t src_idx = 0,
+	           size_t dst_idx = 0, bool required_new_tid = false) {
+		XBarMemPacket<XBarMemWriteRespPayload>::renew(burstMode, payloads, src_idx, dst_idx, required_new_tid);
+	}
 };
 
 class XBarMemReadReqPayload : public acalsim::RecyclableObject {

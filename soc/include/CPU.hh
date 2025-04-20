@@ -45,16 +45,22 @@ public:
 	void step() override {
 		for (auto s_port : this->s_ports_) {
 			if (s_port.second->isPopValid()) {
+				CLASS_INFO << "Is pop valid";
 				auto packet = s_port.second->pop();
 				// read req handling
 				if (auto ReadRespPkt = dynamic_cast<XBarMemReadRespPacket*>(packet)) {
-					this->memReadBusRespHandler(ReadRespPkt);
+					CLASS_INFO << "Receive a read resp";
+					this->memReadXBarRespHandler(ReadRespPkt);
 				}
 				// Write req handling
-				if (auto WriteRespPkt = dynamic_cast<XBarMemWriteRespPacket*>(packet)) {
-					this->memWriteBusRespHandler(WriteRespPkt);
+				else if (auto WriteRespPkt = dynamic_cast<XBarMemWriteRespPacket*>(packet)) {
+					CLASS_INFO << "Receive a write resp";
+					this->memWriteXBarRespHandler(WriteRespPkt);
+				} else if (auto CFU_packet = dynamic_cast<CFUReqPacket*>(packet)) {
+					this->accept(acalsim::top->getGlobalTick(), *packet);
+				} else {
+					CLASS_ERROR << "Not a valid packet";
 				}
-				this->accept(acalsim::top->getGlobalTick(), *packet);
 			}
 		}
 	}
@@ -105,9 +111,9 @@ public:
 	 */
 	bool BusmemWrite(const instr& _i, instr_type _op, uint32_t _addr, uint32_t _data);
 
-	void memReadBusRespHandler(XBarMemReadRespPacket* _pkt);
+	void memReadXBarRespHandler(XBarMemReadRespPacket* _pkt);
 
-	void memWriteBusRespHandler(XBarMemWriteRespPacket* _pkt);
+	void memWriteXBarRespHandler(XBarMemWriteRespPacket* _pkt);
 
 	// CFU support
 	void CFURespHandler(CFURespPacket* _pkt);
