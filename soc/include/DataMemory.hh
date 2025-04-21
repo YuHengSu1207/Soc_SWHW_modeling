@@ -57,34 +57,37 @@ public:
 	void cleanup() override { ; };
 
 	void step() override {
+		auto rc = acalsim::top->getRecycleContainer();
 		if (!respQ_.empty()) { this->trySendResponse(); }
 
 		for (auto s_port : this->s_ports_) {
 			CLASS_INFO << s_port.first;
+			int delay_lentency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_read_latency");
 			if (s_port.second->isPopValid()) {
 				CLASS_INFO << "Is pop valid";
 				int  burst_size = -1;
 				auto packet     = s_port.second->pop();
 				// read req handling
 				if (auto ReadReqPkt = dynamic_cast<XBarMemReadReqPacket*>(packet)) {
+					if (ReadReqPkt->getPayloads().size() != ReadReqPkt->getBurstSize()) {
+						CLASS_ERROR << "Get size : " << ReadReqPkt->getPayloads().size()
+						            << " burst indicates: " << ReadReqPkt->getBurstSize();
+					}
 					assert(ReadReqPkt->getPayloads().size() == ReadReqPkt->getBurstSize());
 					auto payload = ReadReqPkt->getPayloads();
 					burst_size   = payload.size();
 					CLASS_INFO << "[DMEM] : pop a read packet : " << ReadReqPkt->getAutoIncTID()
 					           << " with burst size : " << burst_size;
 					this->pending_[ReadReqPkt->getAutoIncTID()].expected = payload.size();
-					this->memReadReqHandler(acalsim::top->getGlobalTick(),
-					                        payload[0]);  // handle the first read immediately.
-					if (burst_size != 1) {
-						for (int i = 1; i < ReadReqPkt->getBurstSize(); i++) {
-							auto                          payload = ReadReqPkt->getPayloads();
-							acalsim::LambdaEvent<void()>* event =
-							    new acalsim::LambdaEvent<void()>([this, i, payload]() {
-								    this->memReadReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
-							    });
-							this->scheduleEvent(event, acalsim::top->getGlobalTick() + i);
-						}
+					for (int i = 0; i < ReadReqPkt->getBurstSize(); i++) {
+						auto                          payload = ReadReqPkt->getPayloads();
+						acalsim::LambdaEvent<void()>* event =
+						    new acalsim::LambdaEvent<void()>([this, i, payload, delay_lentency]() {
+							    this->memReadReqHandler(acalsim::top->getGlobalTick() + i + delay_lentency, payload[i]);
+						    });
+						this->scheduleEvent(event, acalsim::top->getGlobalTick() + i + delay_lentency);
 					}
+					rc->recycle(ReadReqPkt);
 				}
 				// Write req handling
 				if (auto WriteReq = dynamic_cast<XBarMemWriteReqPacket*>(packet)) {
@@ -94,22 +97,20 @@ public:
 					CLASS_INFO << "[DMEM] : pop a write packet: " << WriteReq->getAutoIncTID() << " with size "
 					           << burst_size;
 					this->pending_[WriteReq->getAutoIncTID()].expected = payload.size();
-					this->memWriteReqHandler(acalsim::top->getGlobalTick(), payload[0]);
-					if (burst_size != 1) {
-						for (int i = 1; i < WriteReq->getBurstSize(); i++) {
-							auto                          payload = WriteReq->getPayloads();
-							acalsim::LambdaEvent<void()>* event =
-							    new acalsim::LambdaEvent<void()>([this, i, payload]() {
-								    this->memWriteReqHandler(acalsim::top->getGlobalTick() + i, payload[i]);
-							    });
-							this->scheduleEvent(event, acalsim::top->getGlobalTick() + i);
-						}
+					for (int i = 0; i < WriteReq->getBurstSize(); i++) {
+						auto                          payload = WriteReq->getPayloads();
+						acalsim::LambdaEvent<void()>* event   = new acalsim::LambdaEvent<void()>([this, i, payload,
+                                                                                                delay_lentency]() {
+                            this->memWriteReqHandler(acalsim::top->getGlobalTick() + i + delay_lentency, payload[i]);
+                        });
+						this->scheduleEvent(event, acalsim::top->getGlobalTick() + i + delay_lentency);
 					}
+					rc->recycle(WriteReq);
 				}
 				// expect to get the response at
 				acalsim::LambdaEvent<void()>* event =
 				    new acalsim::LambdaEvent<void()>([this]() { this->trySendResponse(); });
-				this->scheduleEvent(event, acalsim::top->getGlobalTick() + burst_size + 1);
+				this->scheduleEvent(event, acalsim::top->getGlobalTick() + burst_size + 1 + delay_lentency);
 			}
 		}
 	}

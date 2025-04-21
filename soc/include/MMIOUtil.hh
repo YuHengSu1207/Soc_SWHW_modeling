@@ -72,9 +72,16 @@ protected:
 
 	XBarMemReadReqPacket* Construct_MemReadpkt_burst(std::string _src, std::vector<XBarMemReadReqPayload*>& payloads) {
 		/* assemble burst payloads */
-		auto rc       = acalsim::top->getRecycleContainer();
-		bool renew_id = true;
-		int  burst    = int(log(payloads.size()));
+		auto rc           = acalsim::top->getRecycleContainer();
+		bool renew_id     = true;
+		int  payload_size = payloads.size();
+		int  burst        = -1;
+		switch (payload_size) {
+			case 4: burst = 2; break;
+			case 2: burst = 1; break;
+			case 1: burst = 0; break;
+			default: burst = -1; break;
+		}
 		for (auto payload : payloads) { payload->setCaller(_src); }
 		size_t                src = getIndex(_src);
 		size_t                dst = slaveIndex(payloads[0]->getAddr());
@@ -86,13 +93,20 @@ protected:
 
 	XBarMemWriteReqPacket* Construct_MemWritepkt_burst(std::string                           _src,
 	                                                   std::vector<XBarMemWriteReqPayload*>& payloads) {
-		auto rc    = acalsim::top->getRecycleContainer();
-		int  burst = static_cast<int>(log2(payloads.size()));
+		auto rc           = acalsim::top->getRecycleContainer();
+		int  payload_size = payloads.size();
+		bool renew_id     = true;
+		int  burst        = -1;
+		switch (payload_size) {
+			case 4: burst = 2; break;
+			case 2: burst = 1; break;
+			case 1: burst = 0; break;
+			default: burst = -1; break;
+		}
 		for (auto payload : payloads) { payload->setCaller(_src); }
 
-		size_t                 src      = getIndex(_src);
-		size_t                 dst      = slaveIndex(payloads[0]->getAddr());
-		bool                   renew_id = true;
+		size_t                 src = getIndex(_src);
+		size_t                 dst = slaveIndex(payloads[0]->getAddr());
 		XBarMemWriteReqPacket* pkt =
 		    rc->acquire<XBarMemWriteReqPacket>(&XBarMemWriteReqPacket::renew, burst, payloads, src, dst, renew_id);
 		for (auto payload : pkt->getPayloads()) { payload->setTid(pkt->getAutoIncTID()); }

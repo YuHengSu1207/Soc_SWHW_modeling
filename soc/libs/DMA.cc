@@ -43,8 +43,9 @@ void DMAController::readMMIO(acalsim::Tick _when, XBarMemReadReqPayload* _memReq
 	respPkt->setTid(_memReqPkt->getTid());
 
 	std::vector<XBarMemReadRespPayload*> beats   = {respPkt};
-	auto                                 respPtr = Construct_MemReadRespPkt(beats, _memReqPkt->getCaller(), "dm");
-	CommandQ.push(respPtr);
+	auto                                 respPtr = Construct_MemReadRespPkt(beats, "dma", _memReqPkt->getCaller());
+	assert(_memReqPkt->getCaller() == "cpu");
+	resp_Q.push(respPtr);
 	rc->recycle(_memReqPkt);
 }
 
@@ -86,8 +87,10 @@ void DMAController::writeMMIO(acalsim::Tick _when, XBarMemWriteReqPayload* _memR
 	respPkt->setTid(_memReqPkt->getTid());
 
 	std::vector<XBarMemWriteRespPayload*> beats   = {respPkt};
-	auto                                  respPtr = Construct_MemWriteRespPkt(beats, _memReqPkt->getCaller(), "dm");
-	CommandQ.push(respPtr);
+	auto                                  respPtr = Construct_MemWriteRespPkt(beats, "dma", _memReqPkt->getCaller());
+	// for the first part the caller can only be cpu
+	assert(_memReqPkt->getCaller() == "cpu");
+	resp_Q.push(respPtr);
 	rc->recycle(_memReqPkt);
 }
 
@@ -208,11 +211,10 @@ void DMAController::scheduleReadsForBuffer() {
 	/* LABELED_INFO(this->getName()) << "Starting DMA read datamem to the bufferMemory " << startIndex << " to "
 	                              << startIndex + chunk - 1 << " with transaction id " << tid;*/
 
-	auto m_port = this->getMasterPort(this->getName() + "-m");
-	if (!m_reg->isStalled() && m_reg->push(XbarPkt)) {
+	if (!m_req->isStalled() && m_req->push(XbarPkt)) {
 		// good
 	} else {
-		this->CommandQ.push(XbarPkt);
+		this->req_Q.push(XbarPkt);
 	}
 	// Keep track of how many read bursts are in flight (usually 1 in this approach)
 	this->pendingBusReadResponses = 1;
@@ -235,6 +237,7 @@ void DMAController::handleReadResponse(XBarMemReadRespPacket* pkt) {
 		} else {
 			LABELED_ERROR(this->getName()) << "Invalid local index in handleReadResponse!";
 		}
+		rc->recycle(rresp);
 	}
 
 	int tid = pkt->getAutoIncTID();
@@ -309,10 +312,10 @@ void DMAController::scheduleWritesFromBuffer() {
 		int tid = XbarWriteReq->getAutoIncTID();
 		XbarWriteReq->setTID(tid);
 
-		if (!m_reg->isStalled() && m_reg->push(XbarWriteReq)) {
+		if (!m_req->isStalled() && m_req->push(XbarWriteReq)) {
 			// success
 		} else {
-			this->CommandQ.push(XbarWriteReq);
+			this->req_Q.push(XbarWriteReq);
 		}
 
 		this->pendingBusWriteResponses++;
@@ -479,6 +482,7 @@ void DMAController::handleWriteCompletion(XBarMemWriteRespPacket* pkt) {
 	// LABELED_INFO(this->getName()) << "DMA write response received with tid " << pkt->getAutoIncTID();
 	auto rc  = acalsim::top->getRecycleContainer();
 	int  tid = pkt->getAutoIncTID();
+	for (auto* payload : pkt->getPayloads()) { rc->recycle(payload); }
 	rc->recycle(pkt);
 
 	this->pendingBusWriteResponses--;

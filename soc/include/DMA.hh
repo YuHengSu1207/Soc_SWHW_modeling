@@ -18,28 +18,38 @@ public:
 
 	virtual ~DMAController() {}
 
-	void init() override { this->m_reg = this->getPipeRegister("bus-m"); }
+	void init() override {
+		this->m_req  = this->getPipeRegister("bus-m");
+		this->m_resp = this->getPipeRegister("bus-m-2");
+	}
 
 	void registerSimPort() { this->addSlavePort("bus-s", 1); }
 
 	void cleanup() override { ; };
 
 	void step() override {
-		if (!CommandQ.empty()) { this->trySendPacket(); }
-
+		if (!req_Q.empty() || !resp_Q.empty()) { this->trySendPacket(); }
+		auto rc = acalsim::top->getRecycleContainer();
 		for (auto s_port : this->s_ports_) {
 			if (s_port.second->isPopValid()) {
 				auto packet = s_port.second->pop();
 				// read req handling
+				int delay_lentency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_read_latency");
 				if (auto ReadReqPkt = dynamic_cast<XBarMemReadReqPacket*>(packet)) {
 					assert(ReadReqPkt->getPayloads().size() == ReadReqPkt->getBurstSize() &&
 					       ReadReqPkt->getBurstSize() == 1);
-					auto payload = ReadReqPkt->getPayloads();
-					this->readMMIO(acalsim::top->getGlobalTick(), payload[0]);
-					// expect to get the response at
+					auto                          payload = ReadReqPkt->getPayloads();
 					acalsim::LambdaEvent<void()>* event =
+					    new acalsim::LambdaEvent<void()>([this, payload, delay_lentency]() {
+						    this->readMMIO(acalsim::top->getGlobalTick() + delay_lentency, payload[0]);
+					    });
+					this->scheduleEvent(event, acalsim::top->getGlobalTick() + delay_lentency);
+
+					// expect to get the response at
+					acalsim::LambdaEvent<void()>* event_send_req =
 					    new acalsim::LambdaEvent<void()>([this]() { this->trySendPacket(); });
-					this->scheduleEvent(event, acalsim::top->getGlobalTick() + 1);
+					this->scheduleEvent(event_send_req, acalsim::top->getGlobalTick() + 1 + delay_lentency);
+					rc->recycle(ReadReqPkt);
 				}
 				// Write req handling
 				else if (auto WriteReq = dynamic_cast<XBarMemWriteReqPacket*>(packet)) {
@@ -49,7 +59,8 @@ public:
 					// expect to get the response at
 					acalsim::LambdaEvent<void()>* event =
 					    new acalsim::LambdaEvent<void()>([this]() { this->trySendPacket(); });
-					this->scheduleEvent(event, acalsim::top->getGlobalTick() + 1);
+					this->scheduleEvent(event, acalsim::top->getGlobalTick() + 1 + delay_lentency);
+					rc->recycle(WriteReq);
 				}
 				// read req handling
 				else if (auto ReadRespPkt = dynamic_cast<XBarMemReadRespPacket*>(packet)) {
@@ -67,9 +78,19 @@ public:
 	}
 
 	void trySendPacket() {
-		if (!CommandQ.empty()) {
-			if (!m_reg->isStalled() && m_reg->push(CommandQ.front())) {
-				CommandQ.pop();
+		if (!req_Q.empty()) {
+			if (!m_req->isStalled() && m_req->push(req_Q.front())) {
+				req_Q.pop();
+			} else {
+				// force to move
+				this->forceStepInNextIteration();
+			}
+		}
+
+		if (!resp_Q.empty()) {
+			if (!m_resp->isStalled() && m_resp->push(resp_Q.front())) {
+				CLASS_INFO << "Push a resp to crossBar";
+				resp_Q.pop();
 			} else {
 				// force to move
 				this->forceStepInNextIteration();
@@ -115,7 +136,8 @@ private:
 	void printBufferMem() const;
 
 private:
-	acalsim::SimPipeRegister* m_reg;  // from addPRMasterPort("bus-m", ...)
+	acalsim::SimPipeRegister* m_req;   // from addPRMasterPort("bus-m", ...)
+	acalsim::SimPipeRegister* m_resp;  // from addPRMasterPort("bus-m-2", ...)
 
 	// DMA registers
 	bool     enabled;
@@ -145,7 +167,8 @@ private:
 	// State: (for conceptual clarity)
 	enum class DmaState { IDLE, READING, WRITING } currentState;
 	// assembled response packets waiting for pipe‑reg
-	std::queue<acalsim::SimPacket*> CommandQ;
+	std::queue<acalsim::SimPacket*> req_Q;
+	std::queue<acalsim::SimPacket*> resp_Q;
 };
 
 #endif  // SOC_INCLUDE_DMA_HH_

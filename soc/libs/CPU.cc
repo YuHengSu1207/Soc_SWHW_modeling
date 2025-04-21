@@ -246,6 +246,8 @@ void CPU::memWriteXBarRespHandler(XBarMemWriteRespPacket* _pkt) {
 	// LABELED_INFO(this->getName()) << "CPU finish write transaction" << _pkt->getAutoIncTID();
 	auto memPackets = _pkt->getPayloads();
 	int  tid        = _pkt->getAutoIncTID();
+	for (auto* payload : memPackets) { acalsim::top->getRecycleContainer()->recycle(payload); }
+	acalsim::top->getRecycleContainer()->recycle(_pkt);
 }
 
 void CPU::memReadRespHandler(XBarMemReadRespPayload* _pkt) {
@@ -257,6 +259,7 @@ void CPU::memReadRespHandler(XBarMemReadRespPayload* _pkt) {
 	// acalsim::top->getRecycleContainer()->recycle(_pkt);
 	commitInstr(i);
 	this->pc += 4;
+	acalsim::top->getRecycleContainer()->recycle(_pkt);
 }
 
 void CPU::memWriteRespHandler(XBarMemWriteRespPayload* _pkt) {
@@ -265,6 +268,7 @@ void CPU::memWriteRespHandler(XBarMemWriteRespPayload* _pkt) {
 	// acalsim::top->getRecycleContainer()->recycle(_pkt);
 	commitInstr(i);
 	this->pc += 4;
+	acalsim::top->getRecycleContainer()->recycle(_pkt);
 }
 
 void CPU::printRegfile() const {

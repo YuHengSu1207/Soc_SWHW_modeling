@@ -83,7 +83,7 @@ public:
 		// Data Memory Timing Model
 		this->dmem = new DataMemory("DataMemory", mem_size);
 		// XBar
-		this->XBar = new acalsim::crossbar::CrossBar("CrossBar", 2, 1);
+		this->XBar = new acalsim::crossbar::CrossBar("CrossBar", 2, 2);
 
 		// Instruction Set Architecture Emulator (Functional Model)
 		this->isaEmulator = new Emulator("RISCV RV32I Emulator");
@@ -127,10 +127,15 @@ public:
 		for (auto mp : XBar->getMasterPortsBySlave("Req", 0)) {
 			acalsim::SimPortManager::ConnectPort(XBar, this->dmem, mp->getName(), "bus-s");
 		}
+		for (auto mp : XBar->getMasterPortsBySlave("Req", 1)) {
+			acalsim::SimPortManager::ConnectPort(XBar, this->dma, mp->getName(), "bus-s");
+		}
 
 		// slave construction (dm)
 		// Register PRMasterPort to Slaves for the response channel
 		this->dmem->addPRMasterPort("bus-m", XBar->getPipeRegister("Resp", 0));
+		// to avoid renaming // send request back to cpu / accelator
+		this->dma->addPRMasterPort("bus-m-2", XBar->getPipeRegister("Resp", 1));
 		// Simport Connection (Bus <> SlavePort at Devices)
 		for (auto mp : XBar->getMasterPortsBySlave("Resp", 0)) {
 			acalsim::SimPortManager::ConnectPort(XBar, this->cpu, mp->getName(), "bus-s");
