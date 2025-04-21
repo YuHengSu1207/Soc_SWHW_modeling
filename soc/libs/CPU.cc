@@ -172,7 +172,6 @@ bool CPU::BusMemRead(const instr& _i, instr_type _op, uint32_t _addr, operand _a
 		CLASS_ERROR << "Failed to convert that into the CrossBarPacket";
 	}
 	if (!is_stalled && this->m_reg->push(static_cast<acalsim::crossbar::CrossBarPacket*>(Pkt))) {
-		this->forceStepInNextIteration();
 		LABELED_INFO(this->getName()) << "Send a read request to crosssbar";
 		// send packet instead of event trigger
 	} else {
@@ -193,7 +192,6 @@ bool CPU::BusmemWrite(const instr& _i, instr_type _op, uint32_t _addr, uint32_t 
 	}
 	if (!is_stalled && this->m_reg->push(Pkt)) {
 		LABELED_INFO(this->getName()) << "Send a write request to bus";
-		this->forceStepInNextIteration();
 		return true;
 	} else {
 		this->request_queue.push(Pkt);

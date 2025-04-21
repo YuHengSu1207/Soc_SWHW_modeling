@@ -153,4 +153,4 @@ private:
 	std::queue<acalsim::SimPacket*> respQ_;
 };
 
-#endif
+#endif  // SOC_INCLUDE_DATAMEMORY_HH_

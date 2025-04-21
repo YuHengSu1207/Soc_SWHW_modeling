@@ -79,21 +79,13 @@ public:
 
 	void trySendPacket() {
 		if (!req_Q.empty()) {
-			if (!m_req->isStalled() && m_req->push(req_Q.front())) {
-				req_Q.pop();
-			} else {
-				// force to move
-				this->forceStepInNextIteration();
-			}
+			if (!m_req->isStalled() && m_req->push(req_Q.front())) { req_Q.pop(); }
 		}
 
 		if (!resp_Q.empty()) {
 			if (!m_resp->isStalled() && m_resp->push(resp_Q.front())) {
 				CLASS_INFO << "Push a resp to crossBar";
 				resp_Q.pop();
-			} else {
-				// force to move
-				this->forceStepInNextIteration();
 			}
 		}
 	};

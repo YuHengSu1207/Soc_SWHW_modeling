@@ -125,9 +125,6 @@ void DataMemory::trySendResponse() {
 				CLASS_INFO << "[DATAMEM] : send packet back";
 				respQ_.pop();
 			}
-		} else {
-			// force to move
-			this->forceStepInNextIteration();
 		}
 	}
 }
