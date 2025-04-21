@@ -105,16 +105,9 @@ public:
 		this->addSimulator(this->cfu);
 
 		// still add those upstream & downstream
-		// connect modules (connected_module, master port name, slave port name)
+		// Keep the dump memory functional
 		this->cpu->addDownStream(this->XBar, "DSBus");
 		this->XBar->addDownStream(this->dmem, "DSDMem");
-		this->XBar->addUpStream(this->cpu, "USCPU");
-		this->dmem->addUpStream(this->XBar, "USBus");
-		// add the DMA
-		this->dma->addDownStream(this->XBar, "DSBus");
-		this->XBar->addUpStream(this->dma, "USDMA");
-		this->dma->addUpStream(this->XBar, "USBus");
-		this->XBar->addDownStream(this->dma, "DSDMA");
 		// add CFU
 		this->cpu->addDownStream(this->cfu, "DSCFU");
 		this->cfu->addUpStream(this->cpu, "USCPU");

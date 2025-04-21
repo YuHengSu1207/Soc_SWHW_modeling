@@ -393,6 +393,6 @@ std::string CPU::instrToString(instr_type _op) const {
 void CPU::cleanup() {
 	LABELED_ASSERT(this->request_queue.empty(), "The request queue should be empty");
 	this->printRegfile();
-	// this->dumpMemory();
+	this->dumpMemory();
 	CLASS_INFO << "CPU::cleanup() ";
 }
