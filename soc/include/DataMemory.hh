@@ -61,10 +61,10 @@ public:
 		if (!respQ_.empty()) { this->trySendResponse(); }
 
 		for (auto s_port : this->s_ports_) {
-			CLASS_INFO << s_port.first;
+			// CLASS_INFO << s_port.first;
 			int delay_lentency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_read_latency");
 			if (s_port.second->isPopValid()) {
-				CLASS_INFO << "Is pop valid";
+				// CLASS_INFO << "Is pop valid";
 				int  burst_size = -1;
 				auto packet     = s_port.second->pop();
 				// read req handling
@@ -76,8 +76,8 @@ public:
 					assert(ReadReqPkt->getPayloads().size() == ReadReqPkt->getBurstSize());
 					auto payload = ReadReqPkt->getPayloads();
 					burst_size   = payload.size();
-					CLASS_INFO << "[DMEM] : pop a read packet : " << ReadReqPkt->getAutoIncTID()
-					           << " with burst size : " << burst_size;
+					/* CLASS_INFO << "[DMEM] : pop a read packet : " << ReadReqPkt->getAutoIncTID()
+					           << " with burst size : " << burst_size; */
 					this->pending_[ReadReqPkt->getAutoIncTID()].expected = payload.size();
 					for (int i = 0; i < ReadReqPkt->getBurstSize(); i++) {
 						auto                          payload = ReadReqPkt->getPayloads();
@@ -94,8 +94,8 @@ public:
 					assert(WriteReq->getPayloads().size() == WriteReq->getBurstSize());
 					auto payload = WriteReq->getPayloads();
 					burst_size   = payload.size();
-					CLASS_INFO << "[DMEM] : pop a write packet: " << WriteReq->getAutoIncTID() << " with size "
-					           << burst_size;
+					/* CLASS_INFO << "[DMEM] : pop a write packet: " << WriteReq->getAutoIncTID() << " with size "
+					           << burst_size; */
 					this->pending_[WriteReq->getAutoIncTID()].expected = payload.size();
 					for (int i = 0; i < WriteReq->getBurstSize(); i++) {
 						auto                          payload = WriteReq->getPayloads();

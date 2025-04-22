@@ -45,7 +45,7 @@ public:
 	void step() override {
 		for (auto s_port : this->s_ports_) {
 			if (s_port.second->isPopValid()) {
-				CLASS_INFO << "Is pop valid";
+				// CLASS_INFO << "Is pop valid";
 				auto packet = s_port.second->pop();
 				// read req handling
 				if (auto ReadRespPkt = dynamic_cast<XBarMemReadRespPacket*>(packet)) {

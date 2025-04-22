@@ -122,7 +122,7 @@ void DataMemory::trySendResponse() {
 	if (!respQ_.empty()) {
 		if (!m_reg->isStalled()) {
 			if (m_reg->push(respQ_.front())) {
-				CLASS_INFO << "[DATAMEM] : send packet back";
+				// CLASS_INFO << "[DATAMEM] : send packet back";
 				respQ_.pop();
 			}
 		}

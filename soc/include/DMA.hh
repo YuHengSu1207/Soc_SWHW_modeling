@@ -84,7 +84,7 @@ public:
 
 		if (!resp_Q.empty()) {
 			if (!m_resp->isStalled() && m_resp->push(resp_Q.front())) {
-				CLASS_INFO << "Push a resp to crossBar";
+				// CLASS_INFO << "Push a resp to crossBar";
 				resp_Q.pop();
 			}
 		}

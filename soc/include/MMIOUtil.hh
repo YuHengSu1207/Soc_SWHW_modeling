@@ -7,21 +7,30 @@
 /*  Address map  ---------------------------------------------------------- */
 /*  – 0x0000 – 0x7FFF  : Data‑memory (slave‑idx = 0)                       */
 /*  – 0xF000 – 0xF03F  : DMA‑MMIO  (slave‑idx = 1)                         */
+/* 	– 0x12000 – 0x120F0: SystolicArray‑MMIO  (slave‑idx = 2)			   */
+/* 	– 0x20000 – 0x28000: SystolicArray‑Memory (slave‑idx = 2)			   */
 /*    everything else : map to data‑memory                                 */
 class MMIOUTIL {
 	/* --- helpers ------------------------------------------------------- */
-	constexpr static uint32_t MMIO_BASE = 0xF000;
-	constexpr static uint32_t MMIO_END  = 0xF03F;
+	constexpr static uint32_t DMA_MMIO_BASE  = 0xF000;
+	constexpr static uint32_t DMA_MMIO_END   = 0xF03F;
+	constexpr static uint32_t SA_MMIO_BASE   = 0x12000;
+	constexpr static uint32_t SA_MMIO_END    = 0x120F0;
+	constexpr static uint32_t SA_MEMORY_BASE = 0x20000;
+	constexpr static uint32_t SA_MEMORY_END  = 0x28000;
 
 	static size_t getIndex(const std::string& name) {
 		if (name == "cpu" || name == "dm") return 0;  // cpu, dm (first in index)
 		if (name == "dma") return 1;                  // dma -> Req[1]
-		return 0;                                     // default / unknown
+		if (name == "sa") return 2;
+		return 0;  // default / unknown
 	}
 
 	static size_t slaveIndex(uint32_t addr) {
-		if (addr >= MMIO_BASE && MMIO_END) {
+		if (addr >= DMA_MMIO_BASE && addr <= DMA_MMIO_END) {
 			return 1;
+		} else if ((addr >= SA_MMIO_BASE && addr <= SA_MMIO_END) || (addr >= SA_MEMORY_BASE && addr <= SA_MEMORY_END)) {
+			return 2;
 		} else {
 			return 0;
 		}

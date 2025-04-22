@@ -34,6 +34,7 @@
 #include "DataStruct.hh"
 #include "Emulator.hh"
 #include "SystemConfig.hh"
+#include "SystolicArray.hh"
 
 /**
  * @class SOC
@@ -83,7 +84,7 @@ public:
 		// Data Memory Timing Model
 		this->dmem = new DataMemory("DataMemory", mem_size);
 		// XBar
-		this->XBar = new acalsim::crossbar::CrossBar("CrossBar", 2, 2);
+		this->XBar = new acalsim::crossbar::CrossBar("CrossBar", 3, 3);
 
 		// Instruction Set Architecture Emulator (Functional Model)
 		this->isaEmulator = new Emulator("RISCV RV32I Emulator");
@@ -97,12 +98,16 @@ public:
 		// CFU
 		this->cfu = new CFU("CFU");
 
+		// Systolic array
+		this->sa = new SystolicArray("SA");
+
 		// register simulators
 		this->addSimulator(this->cpu);
 		this->addSimulator(this->dmem);
 		this->addSimulator(this->XBar);
 		this->addSimulator(this->dma);
 		this->addSimulator(this->cfu);
+		this->addSimulator(this->sa);
 
 		// still add those upstream & downstream
 		// Keep the dump memory functional
@@ -112,10 +117,11 @@ public:
 		this->cpu->addDownStream(this->cfu, "DSCFU");
 		this->cfu->addUpStream(this->cpu, "USCPU");
 
-		// master construction (cpu, dma)
+		// master construction (cpu, dma, systolic array)
 		// Register PRMasterPort to Masters in `SimTop`
 		this->cpu->addPRMasterPort("bus-m", XBar->getPipeRegister("Req", 0));
 		this->dma->addPRMasterPort("bus-m", XBar->getPipeRegister("Req", 1));
+		this->sa->addPRMasterPort("bus-m", XBar->getPipeRegister("Req", 2));
 		// Make SimPort Connection to Slaves in `SimTop`
 		for (auto mp : XBar->getMasterPortsBySlave("Req", 0)) {
 			acalsim::SimPortManager::ConnectPort(XBar, this->dmem, mp->getName(), "bus-s");
@@ -123,18 +129,27 @@ public:
 		for (auto mp : XBar->getMasterPortsBySlave("Req", 1)) {
 			acalsim::SimPortManager::ConnectPort(XBar, this->dma, mp->getName(), "bus-s");
 		}
+		for (auto mp : XBar->getMasterPortsBySlave("Req", 2)) {
+			acalsim::SimPortManager::ConnectPort(XBar, this->sa, mp->getName(), "bus-s");
+		}
 
 		// slave construction (dm)
 		// Register PRMasterPort to Slaves for the response channel
 		this->dmem->addPRMasterPort("bus-m", XBar->getPipeRegister("Resp", 0));
 		// to avoid renaming // send request back to cpu / accelator
 		this->dma->addPRMasterPort("bus-m-2", XBar->getPipeRegister("Resp", 1));
+
+		this->sa->addPRMasterPort("bus-m-2", XBar->getPipeRegister("Resp", 2));
 		// Simport Connection (Bus <> SlavePort at Devices)
 		for (auto mp : XBar->getMasterPortsBySlave("Resp", 0)) {
 			acalsim::SimPortManager::ConnectPort(XBar, this->cpu, mp->getName(), "bus-s");
 		}
 		for (auto mp : XBar->getMasterPortsBySlave("Resp", 1)) {
 			acalsim::SimPortManager::ConnectPort(XBar, this->dma, mp->getName(), "bus-s");
+		}
+
+		for (auto mp : XBar->getMasterPortsBySlave("Resp", 2)) {
+			acalsim::SimPortManager::ConnectPort(XBar, this->sa, mp->getName(), "bus-s");
 		}
 
 		// channel cpu <-> cfu
@@ -172,6 +187,7 @@ private:
 	DataMemory*                  dmem;         ///< Data memory subsystem model
 	DMAController*               dma;          ///< DMA controller for data transfer
 	CFU*                         cfu;
+	SystolicArray*               sa;
 	acalsim::crossbar::CrossBar* XBar;
 };
 
