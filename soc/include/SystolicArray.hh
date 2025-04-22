@@ -44,8 +44,7 @@ private:
 	void PokeDMAReady();
 
 	// Internal phases
-	void preloadWeights();
-	void computeMatrix();
+	void computeMatrix(int MatSize);
 	void writeOutputs();
 
 	// Send any queued packets
