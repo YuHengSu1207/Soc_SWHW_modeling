@@ -336,10 +336,12 @@ void SystolicArray::initialized_transaction() {
 	read_MatB_size     = 0;
 	LABELED_ASSERT(expected_MatA_size <= 2048 && expected_MatB_size <= 2048,
 	               "We assumes that matrix size to be less than 2048");
-	for (int i = 0; i < 2048; i++) {
-		A_matrix[i] = 0;
-		B_matrix[i] = 0;
-		C_matrix[i] = 0;
+	for (int i = 0; i < 64; i++) {
+		for (int j = 0; j < 64; j++) {
+			A_matrix[i][j] = 0;
+			B_matrix[i][j] = 0;
+			C_matrix[i][j] = 0;
+		}
 	}
 	// start preloading weights / input
 	AskDMAtoWrite_matA();
@@ -375,8 +377,51 @@ void SystolicArray::handleReadResponse(XBarMemReadRespPacket* pkt) {
 				AskDMAtoWrite_matB();
 			} else if (phase_ == READ_MAT_B) {
 				CLASS_INFO << "DMA Finished MatB loading.";
+
+				// -------------------- Load A_matrix --------------------
+				for (int i = 0; i < strideA_; ++i) {
+					for (int j = 0; j < strideA_; ++j) {
+						// Each row has strideA_ elements, and 4 elements are in one sram_ word
+						uint32_t word_idx = A_addr_ / 4 + i * ((strideA_ + 3) / 4) + (j / 4);
+						uint32_t word     = sram_[word_idx];
+						uint8_t  value    = (word >> ((j % 4) * 8)) & 0xFF;
+						A_matrix[i][j]    = value;
+					}
+				}
+
+				// -------------------- Load B_matrix --------------------
+				for (int i = 0; i < strideB_; ++i) {
+					for (int j = 0; j < strideB_; ++j) {
+						uint32_t word_idx = B_addr_ / 4 + i * ((strideB_ + 3) / 4) + (j / 4);
+						uint32_t word     = sram_[word_idx];
+						uint8_t  value    = (word >> ((j % 4) * 8)) & 0xFF;
+						B_matrix[i][j]    = value;
+					}
+				}
+
+				// Print A_matrix
+				CLASS_INFO << "[A_matrix]";
+				for (uint32_t i = 0; i < strideA_; ++i) {
+					std::ostringstream row;
+					row << "A[" << i << "]: ";
+					for (uint32_t j = 0; j < strideA_; ++j) {
+						row << std::setw(3) << std::setfill(' ') << static_cast<int>(A_matrix[i][j]) << " ";
+					}
+					CLASS_INFO << row.str();
+				}
+
+				// Print B_matrix
+				CLASS_INFO << "[B_matrix]";
+				for (uint32_t i = 0; i < strideB_; ++i) {
+					std::ostringstream row;
+					row << "B[" << i << "]: ";
+					for (uint32_t j = 0; j < strideB_; ++j) {
+						row << std::setw(3) << std::setfill(' ') << static_cast<int>(B_matrix[i][j]) << " ";
+					}
+					CLASS_INFO << row.str();
+				}
 				phase_ = COMPUTE;
-				this->DumpMemory();
+				// this->DumpMemory();
 				CLASS_ERROR << "Not implemented";
 			}
 		} else {
@@ -393,22 +438,7 @@ void SystolicArray::handleReadResponse(XBarMemReadRespPacket* pkt) {
 	// check if all weights loaded?
 }
 
-void SystolicArray::computeMatrix() {
-	// simple functional model: read each A and multiply-accumulate
-	for (uint32_t i = 0; i < M_; ++i) {
-		for (uint32_t j = 0; j < N_; ++j) {
-			uint32_t sum = 0;
-			for (uint32_t k = 0; k < K_; ++k) {
-				uint32_t addrA = A_addr_ + (i * strideA_ + k) * sizeof(uint32_t);
-				uint32_t a     = 0;
-				uint32_t b     = B_matrix[k * N_ + j];
-				sum += a * b;
-			}
-			C_matrix[i * N_ + j] = sum;
-		}
-	}
-	writeOutputs();
-}
+void SystolicArray::computeMatrix() {}
 
 void SystolicArray::writeOutputs() {
 	auto rc = acalsim::top->getRecycleContainer();
@@ -416,8 +446,8 @@ void SystolicArray::writeOutputs() {
 		for (uint32_t j = 0; j < N_; ++j) {
 			uint32_t addr = C_addr_ + (i * strideC_ + j) * sizeof(uint32_t);
 			instr    dummy;
-			auto     wr = rc->acquire<XBarMemWriteReqPayload>(&XBarMemWriteReqPayload::renew, dummy, SW, addr,
-                                                          C_matrix[i * N_ + j]);
+			auto     wr =
+			    rc->acquire<XBarMemWriteReqPayload>(&XBarMemWriteReqPayload::renew, dummy, SW, addr, C_matrix[0][0]);
 			std::vector<XBarMemWriteReqPayload*> beats = {wr};
 			auto                                 pkt   = Construct_MemWritepkt_burst("sa", beats);
 			req_Q_.push(pkt);

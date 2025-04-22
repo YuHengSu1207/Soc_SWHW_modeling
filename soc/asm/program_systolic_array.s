@@ -1,20 +1,34 @@
 .data
 ## allocate memory space for Martix A, B, C data in shared data memory. (start from 0x8000)
 mat_A:
-.byte 1 4 5 3
-.byte 1 4 2 2
-.byte 5 5 3 3
-.byte 4 3 1 5
+.byte 1 4 5 3 1 2 3 4
+.byte 1 4 2 2 2 1 2 3
+.byte 5 5 3 3 2 1 3 2
+.byte 4 3 1 5 2 5 1 3
+.byte 1 4 5 3 1 2 3 4
+.byte 1 4 2 2 2 1 2 3
+.byte 5 5 3 3 2 1 3 2
+.byte 4 3 1 5 2 5 1 3
+
 mat_B:
-.byte 1 4 3 4
-.byte 5 5 5 2
-.byte 4 4 5 4
-.byte 3 4 3 5
+.byte 1 4 3 4 2 3 4 5 
+.byte 5 5 5 2 1 2 5 1
+.byte 4 4 5 4 3 2 5 4
+.byte 3 4 3 5 1 2 3 4
+.byte 1 4 3 4 2 3 4 5 
+.byte 5 5 5 2 1 2 5 1
+.byte 4 4 5 4 3 2 5 4
+.byte 3 4 3 5 1 2 3 4
+
 mat_C:
-.byte 0 0 0 0
-.byte 0 0 0 0
-.byte 0 0 0 0
-.byte 0 0 0 0
+.byte 0 0 0 0 0 0 0 0
+.byte 0 0 0 0 0 0 0 0
+.byte 0 0 0 0 0 0 0 0
+.byte 0 0 0 0 0 0 0 0
+.byte 0 0 0 0 0 0 0 0
+.byte 0 0 0 0 0 0 0 0
+.byte 0 0 0 0 0 0 0 0
+.byte 0 0 0 0 0 0 0 0
 
 ## allocate memory space for constant value in shared data memory for computation.
 ACCEL_REG_BASE_ADDR:
@@ -114,7 +128,7 @@ lw t1, 0(t6)
 ## t1 = 0x12000 + 0x18
 add t1, t1, t0
 ## store 0x10 into mem[0x12018]
-li t2, 0x10
+li t2, 0x100
 sw t2, 0(t1)
 
 ## 3. Program MATC_MEM_ADDR reg
@@ -124,7 +138,7 @@ lw t1, 0(t6)
 ## t1 = 0x12000 + 0x1C
 add t1, t1, t0
 ## store 0x20 into mem[0x1201C]
-li t2, 0x20
+li t2, 0x200
 sw t2, 0(t1)
 
 ## 4. Program ACCEL_MATA_SIZE reg
@@ -133,7 +147,7 @@ la t6, ACCEL_MATA_SIZE
 lw t1, 0(t6)
 ## t1 = 0x12000 + 0x8
 add t1, t1, t0
-li t2, 0x00030003
+li t2, 0x00070007
 ## store 0x00003003 into mem[0x12008]
 sw t2, 0(t1)
 
@@ -144,7 +158,7 @@ lw t1, 0(t6)
 ## t1 = 0x12000 + 0xC
 add t1, t1, t0
 ## store 0x00030003 into mem[0x1200C]
-li t2, 0x00030003
+li t2, 0x00070007
 sw t2, 0(t1)
 
 ## 6. Program ACCEL_MATC_SIZE reg
@@ -154,7 +168,7 @@ lw t1, 0(t6)
 ## t1 = 0x12000 + 0x10
 add t1, t1, t0
 ## store 0x00030003 into mem[0x12010]
-li t2, 0x00030003
+li t2, 0x00070007
 sw t2, 0(t1)
 
 ## 7. Program MAT_MEM_STRIDE reg
@@ -164,7 +178,7 @@ lw t1, 0(t6)
 ## t1 = 0x12000 + 0x20
 add t1, t1, t0
 ## store 0x00040404 into mem[0x12020]
-li t2, 0x00040404
+li t2, 0x00080808
 sw t2, 0(t1)
 
 

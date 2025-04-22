@@ -63,9 +63,9 @@ private:
 	uint32_t strideA_ = 0, strideB_ = 0, strideC_ = 0;
 	int      expected_MatA_size, expected_MatB_size, read_MatA_size, read_MatB_size;
 	// Internal SRAM
-	uint8_t  A_matrix[2048];
-	uint8_t  B_matrix[2048];
-	uint16_t C_matrix[2048];  // size M_ * N_
+	uint8_t  A_matrix[64][64];
+	uint8_t  B_matrix[64][64];
+	uint16_t C_matrix[64][64];  // size M_ * N_
 
 	/* ---------- on‑chip SRAM ---------- */
 	uint32_t sram_[SA_SRAM_SIZE]{};
