@@ -53,6 +53,15 @@ ACCEL_OFFSET_MATC_MEM_ADDR:
 ACCEL_OFFSET_MAT_MEM_STRIDE:
 .word 0x20
 
+ACCEL_MATA_BASE_LOCATION:
+.word 0x24
+
+ACCEL_MATB_BASE_LOCATION:
+.word 0x28
+
+ACCEL_MATC_BASE_LOCATION:
+.word 0x2C
+
 DMA_OFFSET_ENABLE:
 .word 0x0
 
@@ -138,7 +147,7 @@ add t1, t1, t0
 li t2, 0x00030003
 sw t2, 0(t1)
 
-## 3. Program ACCEL_MATC_SIZE reg
+## 6. Program ACCEL_MATC_SIZE reg
 ## t1 -> 0x3003 (Base address of ACCEL_MATC_SIZE reg)
 la t6, ACCEL_MATC_SIZE
 lw t1, 0(t6)
@@ -148,7 +157,7 @@ add t1, t1, t0
 li t2, 0x00030003
 sw t2, 0(t1)
 
-## 4. Program MAT_MEM_STRIDE reg
+## 7. Program MAT_MEM_STRIDE reg
 ## t1 -> 0x20 (Base address of MAT_MEM_STRIDE reg)
 la t6, ACCEL_OFFSET_MAT_MEM_STRIDE
 lw t1, 0(t6)
@@ -159,7 +168,33 @@ li t2, 0x00040404
 sw t2, 0(t1)
 
 
-## 5. Enable accelerator
+## 8. Program ACCEL_MATA_BASE_LOCATION reg
+## t1 -> 0x24 (Base address of ACCEL_MATA_BASE_LOCATION reg)
+la t6, ACCEL_MATA_BASE_LOCATION
+lw t1, 0(t6)
+## t1 = 0x12000 + 0x24
+add t1, t1, t0
+## store s0 into mem[0x12014]
+sw s0, 0(t1)
+
+## 9. Program ACCEL_MATB_BASE_LOCATION reg
+## t1 -> 0x28 (Base address of ACCEL_MATB_BASE_LOCATION reg)
+la t6, ACCEL_MATB_BASE_LOCATION
+lw t1, 0(t6)
+## t1 = 0x12000 + 0x28
+add t1, t1, t0
+## store 0x10 into mem[0x12018]
+sw s1, 0(t1)
+
+## 10. Program ACCEL_MATC_BASE_LOCATION reg
+## t1 -> 0x1c (Base address of ACCEL_MATC_BASE_LOCATION reg)
+la t6, ACCEL_MATC_BASE_LOCATION
+lw t1, 0(t6)
+## t1 = 0x12000 + 0x2C
+add t1, t1, t0
+sw s2, 0(t1)
+
+## 11. Enable accelerator
 ## t1 -> 0x00 (Base address of MAT_MEM_STRIDE reg)
 la t6, DMA_OFFSET_ENABLE
 lw t1, 0(t6)

@@ -44,7 +44,11 @@ void DMAController::readMMIO(acalsim::Tick _when, XBarMemReadReqPayload* _memReq
 
 	std::vector<XBarMemReadRespPayload*> beats   = {respPkt};
 	auto                                 respPtr = Construct_MemReadRespPkt(beats, "dma", _memReqPkt->getCaller());
-	assert(_memReqPkt->getCaller() == "cpu");
+	if (_memReqPkt->getCaller() != "cpu" && _memReqPkt->getCaller() != "sa") {
+		CLASS_ERROR << "DMA receive request from " << _memReqPkt->getCaller();
+	}
+	LABELED_ASSERT(_memReqPkt->getCaller() == "cpu" || _memReqPkt->getCaller() == "sa",
+	               "Should only be programmed by Systolic array or CPU");
 	resp_Q.push(respPtr);
 	rc->recycle(_memReqPkt);
 }
@@ -89,7 +93,8 @@ void DMAController::writeMMIO(acalsim::Tick _when, XBarMemWriteReqPayload* _memR
 	std::vector<XBarMemWriteRespPayload*> beats   = {respPkt};
 	auto                                  respPtr = Construct_MemWriteRespPkt(beats, "dma", _memReqPkt->getCaller());
 	// for the first part the caller can only be cpu
-	assert(_memReqPkt->getCaller() == "cpu");
+	LABELED_ASSERT(_memReqPkt->getCaller() == "cpu" || _memReqPkt->getCaller() == "sa",
+	               "Should only be programmed by Systolic array or CPU");
 	resp_Q.push(respPtr);
 	rc->recycle(_memReqPkt);
 }
@@ -119,6 +124,7 @@ void DMAController::initialized_transaction() {
 	                              << ", height=" << this->true_height;
 	LABELED_INFO(this->getName()) << "DMA stride: src=" << (int)sourceStride << ", dst=" << (int)destStride
 	                              << " total Bytes =" << totalElements << " total words = " << totalWords;
+	LABELED_INFO(this->getName()) << "DMA transfer from " << srcAddr << " to " << dstAddr;
 
 	this->wordsTransferred = 0;
 	this->bufferIndex      = 0;

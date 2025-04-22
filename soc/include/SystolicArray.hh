@@ -35,9 +35,13 @@ private:
 	void initialized_transaction();
 
 	/* ---------- helpers for new SRAM path ---------- */
-	void      memReadReqHandler(acalsim::Tick when, XBarMemReadReqPayload* p);
-	void      memWriteReqHandler(acalsim::Tick when, XBarMemWriteReqPayload* p);
-	uint32_t* getSramPtr(uint32_t addr);
+	void SRAMReadReqHandler(acalsim::Tick when, XBarMemReadReqPayload* p);
+	void SRAMWriteReqHandler(acalsim::Tick when, XBarMemWriteReqPayload* p);
+
+	// Program DMA
+	void AskDMAtoWrite_matA();
+	void AskDMAtoWrite_matB();
+	void PokeDMAReady();
 
 	// Internal phases
 	void preloadWeights();
@@ -47,17 +51,22 @@ private:
 	// Send any queued packets
 	void trySendPacket();
 
+	// Print Utility
+	std::string instrToString(instr_type _op) const;
+	void        DumpMemory() const;
 	// Configuration registers
 	bool     enabled_ = false;
 	bool     done_    = false;
 	uint32_t M_ = 0, K_ = 0, N_ = 0;
 	uint32_t A_addr_ = 0, B_addr_ = 0, C_addr_ = 0;
+	uint32_t A_addr_dm_ = 0, B_addr_dm_ = 0, C_addr_dm_ = 0;
 	uint32_t strideA_ = 0, strideB_ = 0, strideC_ = 0;
-
+	int      expected_MatA_size, expected_MatB_size, read_MatA_size, read_MatB_size;
 	// Internal SRAM
 	uint8_t  A_matrix[2048];
 	uint8_t  B_matrix[2048];
 	uint16_t C_matrix[2048];  // size M_ * N_
+
 	/* ---------- on‑chip SRAM ---------- */
 	uint32_t sram_[SA_SRAM_SIZE]{};
 
@@ -68,6 +77,9 @@ private:
 		std::vector<XBarMemWriteRespPayload*> wbeats;
 	};
 	std::unordered_map<int /*tid*/, BurstTracker> pending_;
+
+	enum Phase { READ_MAT_A, READ_MAT_B, COMPUTE };
+	Phase phase_ = READ_MAT_A;
 
 	// Crossbar ports
 	acalsim::SimPipeRegister*       m_req_  = nullptr;
