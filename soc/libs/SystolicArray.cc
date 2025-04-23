@@ -441,95 +441,65 @@ struct PE {
 	Valid16 psumReg{false, 0}, fwdPsum{false, 0};
 };
 
-void SystolicArray::computeMatrix(int MatSize) {
-	// 1) instantiate a MatSize×MatSize array of PEs
-	std::vector<std::vector<PE>> pe(MatSize, std::vector<PE>(MatSize));
+void SystolicArray::computeMatrix(int SA_Size) {
+	/* -------- data structures ------------------------------------------------ */
+	std::vector<std::vector<PE>> pe(SA_Size, std::vector<PE>(SA_Size));
+	std::vector<int>             emitRow(SA_Size, 0);  // “where do I write next” per column
 
-	// 2) PRELOAD phase: one row of B per cycle, weight “flows” downward
-	for (int cycle = MatSize - 1; cycle >= 0; cycle--) {
-		// shift weights down the columns
-		for (int i = MatSize - 1; i >= 1; i--) {
-			for (int j = 0; j < MatSize; ++j) { pe[i][j].weightReg = pe[i - 1][j].weightReg; }
-		}
-		// load row = cycle
-		for (int j = 0; j < MatSize; ++j) {
+	/* -------- 1.  weight preload (same as before) ---------------------------- */
+	for (int cyc = SA_Size - 1; cyc >= 0; --cyc) {
+		for (int i = SA_Size - 1; i >= 1; --i)
+			for (int j = 0; j < SA_Size; ++j) pe[i][j].weightReg = pe[i - 1][j].weightReg;
+
+		for (int j = 0; j < SA_Size; ++j) {
 			pe[0][j].weightReg.valid = true;
-			pe[0][j].weightReg.data  = B_matrix[cycle][j];
+			pe[0][j].weightReg.data  = B_matrix[cyc][j];
 		}
 	}
 
-	// Print W_matrix
-	/*CLASS_INFO << "[PE_W_matrix]";
+	CLASS_INFO << "[PE_W_matrix]";
 	for (uint32_t i = 0; i < strideB_; ++i) {
-	    std::ostringstream row;
-	    row << "W[" << i << "]: ";
-	    for (uint32_t j = 0; j < strideB_; ++j) {
-	        row << std::setw(3) << std::setfill(' ') << static_cast<int>(pe[i][j].weightReg.data) << " ";
-	    }
-	    CLASS_INFO << row.str();
-	}*/
+		std::ostringstream row;
+		row << "W[" << i << "]: ";
+		for (uint32_t j = 0; j < strideB_; ++j) {
+			row << std::setw(3) << std::setfill(' ') << static_cast<int>(pe[i][j].weightReg.data) << " ";
+		}
+		CLASS_INFO << row.str();
+	}
 
-	// 3) PROPAGATE phase: wave A‑data diagonally, compute & forward partial sums
-	int totalCycles = 2 * MatSize - 1;
-	for (int cycle = 0; cycle < totalCycles; ++cycle) {
-		// — shift A‑data from left to right
-		for (int i = 0; i < MatSize; ++i) {
-			for (int j = MatSize - 1; j >= 0; --j) {
+	auto emit_results = [&](int cycle) {
+		for (int j = 0; j < SA_Size; ++j) {
+			auto& bot = pe[SA_Size - 1][j].psumReg;
+			if (bot.valid && emitRow[j] < SA_Size) {
+				C_matrix[emitRow[j]][j] = bot.sum;  // store
+				++emitRow[j];                       // advance pointer
+
+				// create the “bubble” that must drop on the next cycle
+				bot.valid                        = false;
+				pe[SA_Size - 1][j].fwdPsum.valid = false;
+			}
+		}
+	};
+
+	/* -------- 2.  A-propagation phase ---------------------------------------- */
+	int total = 2 * SA_Size - 1;
+	for (int cyc = 0; cyc < total; ++cyc) {
+		/* shift / inject A */
+		for (int i = 0; i < SA_Size; ++i) {
+			for (int j = SA_Size - 1; j >= 0; --j) {
 				if (j == 0) {
-					int aCol = cycle - i;
-					if (aCol >= 0 && aCol < MatSize) {
-						pe[i][j].inReg.valid = true;
-						pe[i][j].inReg.data  = A_matrix[i][aCol];
-					} else {
-						pe[i][j].inReg.valid = false;
-					}
+					int aCol             = cyc - i;
+					pe[i][j].inReg.valid = (aCol >= 0 && aCol < SA_Size);
+					pe[i][j].inReg.data  = pe[i][j].inReg.valid ? A_matrix[aCol][i] : 0;
 				} else {
 					pe[i][j].inReg = pe[i][j - 1].fwdIn;
 				}
 			}
 		}
 
-		// — compute new psums and forward everything
-		for (int i = MatSize - 1; i >= 0; i--) {
-			for (int j = 0; j < MatSize; ++j) {
-				auto& P = pe[i][j];
-				if (P.weightReg.valid && P.inReg.valid) {
-					uint16_t product = uint16_t(P.inReg.data) * uint16_t(P.weightReg.data);
-					uint16_t prevSum = 0;
-					if (i > 0 && pe[i - 1][j].fwdPsum.valid) prevSum = pe[i - 1][j].fwdPsum.sum;
-
-					P.psumReg.valid = true;
-					P.psumReg.sum   = prevSum + product;
-				} else {
-					P.psumReg.valid = false;
-				}
-				// forward for next cycle
-				P.fwdIn   = P.inReg;
-				P.fwdPsum = P.psumReg;
-			}
-		}
-
-		// print for debugging
-		CLASS_INFO << "[Output cycle:" << cycle << "]";
-		std::ostringstream out;
-		out << "Output: ";
-		for (int j = 0; j < MatSize; ++j) {
-			auto& bot = pe[MatSize - 1][j].psumReg;
-			out << std::setw(3) << (bot.valid ? std::to_string(bot.sum) : std::string(" -1")) << " ";
-		}
-		CLASS_INFO << out.str();
-	}
-	// 4) FLUSH stage: additional MatSize-1 cycles to collect remaining outputs
-	int cycle_cnt = 0;
-	for (int cycle = totalCycles; cycle < totalCycles + MatSize - 1; ++cycle) {
-		// shift A-data: forward previous inputs (no new injection)
-		for (int i = 0; i < MatSize; ++i) {
-			for (int j = 0; j < MatSize; ++j) { pe[i][j].inReg = pe[i][j].fwdIn; }
-		}
-
-		// compute and forward partial sums again
-		for (int i = MatSize - 1; i >= 0; i--) {
-			for (int j = 0; j < MatSize; ++j) {
+		/* MAC + forward */
+		for (int i = SA_Size - 1; i >= 0; --i) {
+			for (int j = 0; j < SA_Size; ++j) {
 				auto& P = pe[i][j];
 				if (P.weightReg.valid && P.inReg.valid) {
 					uint16_t prod   = uint16_t(P.inReg.data) * uint16_t(P.weightReg.data);
@@ -539,20 +509,67 @@ void SystolicArray::computeMatrix(int MatSize) {
 				} else {
 					P.psumReg.valid = false;
 				}
+			}
+		}
+
+		for (int i = SA_Size - 1; i >= 0; --i) {
+			for (int j = 0; j < SA_Size; ++j) {
+				auto& P   = pe[i][j];
 				P.fwdIn   = P.inReg;
 				P.fwdPsum = P.psumReg;
 			}
 		}
-		// log flush
+
+		/*CLASS_INFO << "[Output cycle:" << cyc << "]";
 		std::ostringstream out;
-		out << "[Cycle " << cycle << "] Flush out:  ";
-		for (int j = 0; j < MatSize; ++j) {
-			if (pe[MatSize - 1][j].psumReg.valid)
-				out << std::setw(3) << pe[MatSize - 1][j].fwdPsum.sum << " ";
-			else
-				out << " -  ";
+		out << "Output: ";
+		for (int j = 0; j < SA_Size; ++j) {
+		    auto& bot = pe[SA_Size - 1][j].psumReg;
+		    out << std::setw(3) << (bot.valid ? std::to_string(bot.sum) : std::string(" -1")) << " ";
+		}
+		CLASS_INFO << out.str();*/
+
+		emit_results(cyc);  // store anything that just finished
+	}
+
+	/* -------- 3.  flush phase ------------------------------------------------- */
+	for (int cyc = total; cyc < total + SA_Size - 1; ++cyc) {
+		/* just move tokens that are already in the pipes */
+		for (int i = 0; i < SA_Size; ++i)
+			for (int j = 0; j < SA_Size; ++j) pe[i][j].inReg = pe[i][j - 1].fwdIn;
+
+		for (int i = SA_Size - 1; i >= 0; i--) {
+			for (int j = 0; j < SA_Size; ++j) {
+				auto& P = pe[i][j];
+				if (P.weightReg.valid && P.inReg.valid) {
+					uint16_t prod   = uint16_t(P.inReg.data) * uint16_t(P.weightReg.data);
+					uint16_t prev   = (i > 0 && pe[i - 1][j].fwdPsum.valid) ? pe[i - 1][j].fwdPsum.sum : 0;
+					P.psumReg.valid = true;
+					P.psumReg.sum   = prev + prod;
+				} else {
+					P.psumReg.valid = false;
+				}
+			}
+		}
+
+		for (int i = SA_Size - 1; i >= 0; --i) {
+			for (int j = 0; j < SA_Size; ++j) {
+				auto& P   = pe[i][j];
+				P.fwdIn   = P.inReg;
+				P.fwdPsum = P.psumReg;
+			}
+		}
+
+		CLASS_INFO << "[Output cycle:" << cyc << "]";
+		std::ostringstream out;
+		out << "Output: ";
+		for (int j = 0; j < SA_Size; ++j) {
+			auto& bot = pe[SA_Size - 1][j].psumReg;
+			out << std::setw(3) << (bot.valid ? std::to_string(bot.sum) : std::string(" -1")) << " ";
 		}
 		CLASS_INFO << out.str();
+
+		emit_results(cyc);  // bottom-row tokens that just arrived
 	}
 }
 
