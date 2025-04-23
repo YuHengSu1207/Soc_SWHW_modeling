@@ -12,6 +12,25 @@
 
 #define SA_MEMORY_BASE 0x20000
 #define SA_SRAM_SIZE   8000
+
+struct Valid8 {
+	bool    valid;
+	uint8_t data;
+};
+struct Valid16 {
+	bool     valid;
+	uint16_t sum;
+};
+
+struct PE {
+	// weight register
+	Valid8 weightReg{false, 0};
+	// input pipeline
+	Valid8 inReg{false, 0}, fwdIn{false, 0};
+	// partial‐sum pipeline
+	Valid16 psumReg{false, 0}, fwdPsum{false, 0};
+};
+
 class SystolicArray : public acalsim::CPPSimBase, public MMIOUTIL {
 public:
 	explicit SystolicArray(const std::string& name);
@@ -44,8 +63,18 @@ private:
 	void PokeDMAReady();
 
 	// Internal phases
-	void computeMatrix(int MatSize);
 	void writeOutputs();
+
+	// Core computation
+	std::vector<std::vector<PE>> Construct_PE(int Systolic_Array_Size);
+	void                         Preload_Weight(std::vector<std::vector<PE>>& pe, int SA_Size, int cycle_cnt);
+	void PropagateA_And_MAC(std::vector<std::vector<PE>>& pe, std::vector<std::vector<uint16_t>>& Result,
+	                        std::vector<uint16_t>& emitRow, int SA_Size, int cycle);
+	void FlushAndEmit(std::vector<std::vector<PE>>& pe, std::vector<std::vector<uint16_t>>& Result,
+	                  std::vector<uint16_t>& emitRow, int SA_Size, int cycle);
+	void ComputeTile(int SA_Size);
+
+	void ComputeMatrix();
 
 	// Send any queued packets
 	void trySendPacket();
@@ -65,6 +94,10 @@ private:
 	uint8_t  A_matrix[64][64];
 	uint8_t  B_matrix[64][64];
 	uint16_t C_matrix[64][64];  // size M_ * N_
+
+	uint16_t Tile_Result[8][8];
+	uint8_t  A_Tile[8][8];
+	uint8_t  B_Tile[8][8];
 
 	/* ---------- on‑chip SRAM ---------- */
 	uint32_t sram_[SA_SRAM_SIZE]{};
