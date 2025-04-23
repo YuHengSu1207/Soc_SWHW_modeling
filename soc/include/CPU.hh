@@ -49,12 +49,12 @@ public:
 				auto packet = s_port.second->pop();
 				// read req handling
 				if (auto ReadRespPkt = dynamic_cast<XBarMemReadRespPacket*>(packet)) {
-					CLASS_INFO << "Receive a read resp";
+					// CLASS_INFO << "Receive a read resp";
 					this->memReadXBarRespHandler(ReadRespPkt);
 				}
 				// Write req handling
 				else if (auto WriteRespPkt = dynamic_cast<XBarMemWriteRespPacket*>(packet)) {
-					CLASS_INFO << "Receive a write resp";
+					// CLASS_INFO << "Receive a write resp";
 					this->memWriteXBarRespHandler(WriteRespPkt);
 				} else if (auto CFU_packet = dynamic_cast<CFUReqPacket*>(packet)) {
 					this->accept(acalsim::top->getGlobalTick(), *packet);

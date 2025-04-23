@@ -12,7 +12,7 @@
 
 #define SA_MEMORY_BASE 0x20000
 #define SA_SRAM_SIZE   8000
-#define SASIZE         16
+#define SASIZE         2
 
 struct Valid8 {
 	bool    valid;

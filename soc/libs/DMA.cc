@@ -231,9 +231,8 @@ void DMAController::scheduleReadsForBuffer() {
  */
 void DMAController::handleReadResponse(XBarMemReadRespPacket* pkt) {
 	// LABELED_INFO(this->getName()) << " receive resp and write to the bufferMemory for tid: " <<
-	this->just_get_resp = true;
-	auto rc             = acalsim::top->getRecycleContainer();
-	auto readResponses  = pkt->getPayloads();
+	auto rc            = acalsim::top->getRecycleContainer();
+	auto readResponses = pkt->getPayloads();
 
 	// Insert data into bufferMemory
 	for (auto* rresp : readResponses) {
@@ -322,14 +321,14 @@ void DMAController::scheduleWritesFromBuffer() {
 			// success
 		} else {
 			this->req_Q.push(XbarWriteReq);
+			this->pendingBusWriteResponses++;
 		}
 
-		this->pendingBusWriteResponses++;
 		offset += chunk;
 		chunkCounter++;
 	}
-	// LABELED_INFO(this->getName()) << "With the request queue being size of " << this->CommandQ.size();
 	this->wordsTransferred += wordsToWrite;
+	// CLASS_INFO << "Words transfered : " << this->wordsTransferred << " total words : " << this->totalWords;
 }
 
 /**
@@ -492,6 +491,7 @@ void DMAController::handleWriteCompletion(XBarMemWriteRespPacket* pkt) {
 	rc->recycle(pkt);
 
 	this->pendingBusWriteResponses--;
+	// CLASS_INFO << "Pending Write Response :" <<  this->pendingBusWriteResponses;
 	if (this->pendingBusWriteResponses == 0) {
 		// All writes for this buffer are done
 		// Clear buffer
@@ -513,9 +513,7 @@ void DMAController::transaction_complete() {
 	this->currentState = DmaState::IDLE;
 	this->done         = true;
 	this->enabled      = false;
-	this->dma_tx_num++;
-	this->just_get_resp = false;
-	// LABELED_INFO(this->getName()) << "DMA transaction complete!";
+	LABELED_INFO(this->getName()) << "DMA transaction complete!";
 }
 
 void DMAController::printBufferMem() const {

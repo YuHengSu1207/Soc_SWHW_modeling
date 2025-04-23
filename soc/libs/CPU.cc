@@ -149,8 +149,8 @@ void CPU::processInstr(const instr& _i) {
 }
 
 void CPU::commitInstr(const instr& _i) {
-	CLASS_INFO << "Instruction " << this->instrToString(_i.op)
-	           << " is completed at Tick = " << acalsim::top->getGlobalTick() << " | PC = " << this->pc;
+	/*CLASS_INFO << "Instruction " << this->instrToString(_i.op)
+	           << " is completed at Tick = " << acalsim::top->getGlobalTick() << " | PC = " << this->pc;*/
 
 	if (_i.op == HCF) return;
 
@@ -172,7 +172,7 @@ bool CPU::BusMemRead(const instr& _i, instr_type _op, uint32_t _addr, operand _a
 		CLASS_ERROR << "Failed to convert that into the CrossBarPacket";
 	}
 	if (!is_stalled && this->m_reg->push(static_cast<acalsim::crossbar::CrossBarPacket*>(Pkt))) {
-		LABELED_INFO(this->getName()) << "Send a read request to crosssbar";
+		// LABELED_INFO(this->getName()) << "Send a read request to crosssbar";
 		// send packet instead of event trigger
 	} else {
 		this->request_queue.push(Pkt);

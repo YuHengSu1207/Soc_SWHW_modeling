@@ -79,7 +79,10 @@ public:
 
 	void trySendPacket() {
 		if (!req_Q.empty()) {
-			if (!m_req->isStalled() && m_req->push(req_Q.front())) { req_Q.pop(); }
+			if (!m_req->isStalled() && m_req->push(req_Q.front())) {
+				req_Q.pop();
+				// CLASS_INFO << "Sending request to other component";
+			}
 		}
 
 		if (!resp_Q.empty()) {
@@ -154,8 +157,6 @@ private:
 	int      pendingBusReadResponses;   // Number of outstanding read responses
 	int      pendingBusWriteResponses;  // Number of outstanding write responses
 	uint32_t bufferMemory[256];         ///< Storage for one iteration (just an example size)
-	bool     just_get_resp = false;
-	int      dma_tx_num    = 0;  // Number of DMA transactions
 	// State: (for conceptual clarity)
 	enum class DmaState { IDLE, READING, WRITING } currentState;
 	// assembled response packets waiting for pipe‑reg

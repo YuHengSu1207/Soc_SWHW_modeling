@@ -362,7 +362,6 @@ void SystolicArray::handleReadResponse(XBarMemReadRespPacket* pkt) {
 				AskDMAtoWrite_matB();
 			} else if (phase_ == READ_MAT_B) {
 				CLASS_INFO << "DMA Finished MatB loading.";
-
 				// -------------------- Load A_matrix --------------------
 				for (int i = 0; i < strideA_; ++i) {
 					for (int j = 0; j < strideA_; ++j) {
@@ -761,6 +760,7 @@ void SystolicArray::AskDMAtoWrite_matB() {
 }
 
 void SystolicArray::PokeDMAReady() {
+	// CLASS_INFO << "SA: poke DMA";
 	int delay_lentency = acalsim::top->getParameter<acalsim::Tick>("SOC", "memory_read_latency");
 	// Add a polling loop for DONE (read+check+clear)
 	acalsim::LambdaEvent<void()>* poll_event = new acalsim::LambdaEvent<void()>([this]() {
