@@ -1,5 +1,6 @@
 #include "SystolicArray.hh"
 
+#include <algorithm>
 SystolicArray::SystolicArray(const std::string& name) : acalsim::CPPSimBase(name) {
 	LABELED_INFO(this->getName()) << "Constructing SystolicArray...";
 	// register the slave port for MMIO
@@ -421,16 +422,63 @@ void SystolicArray::handleReadResponse(XBarMemReadRespPacket* pkt) {
 	// check if all weights loaded?
 }
 
+// LoadATile: copy a sub-block from A_matrix into A_Tile, zero-pad to SASIZE×SASIZE
+void SystolicArray::LoadATile(int rowBlk, int kBlk, int tileRows, int kCols) {
+	// Copy valid entries
+	for (int i = 0; i < tileRows; ++i)
+		for (int j = 0; j < kCols; ++j) A_Tile[i][j] = A_matrix[rowBlk + i][kBlk + j];
+	// Zero-pad remaining columns
+	for (int i = 0; i < tileRows; ++i)
+		for (int j = kCols; j < SASIZE; ++j) A_Tile[i][j] = 0;
+	// Zero-pad remaining rows
+	for (int i = tileRows; i < SASIZE; ++i)
+		for (int j = 0; j < SASIZE; ++j) A_Tile[i][j] = 0;
+}
+
+// LoadBTile: copy a sub-block from B_matrix into B_Tile, zero-pad to SASIZE×SASIZE
+void SystolicArray::LoadBTile(int kBlk, int colBlk, int kCols, int tileCols) {
+	// Copy valid entries
+	for (int i = 0; i < kCols; ++i)
+		for (int j = 0; j < tileCols; ++j) B_Tile[i][j] = B_matrix[kBlk + i][colBlk + j];
+	// Zero-pad remaining columns
+	for (int i = 0; i < kCols; ++i)
+		for (int j = tileCols; j < SASIZE; ++j) B_Tile[i][j] = 0;
+	// Zero-pad remaining rows
+	for (int i = kCols; i < SASIZE; ++i)
+		for (int j = 0; j < SASIZE; ++j) B_Tile[i][j] = 0;
+}
+
 void SystolicArray::ComputeMatrix() {
-	std::vector<std::vector<uint8_t>> A_tile(strideA_, std::vector<uint8_t>(strideA_, 0));
-	std::vector<std::vector<uint8_t>> B_tile(strideB_, std::vector<uint8_t>(strideB_, 0));
-	for (int i = 0; i < strideA_; i++) {
-		for (int j = 0; j < strideA_; j++) {
-			A_Tile[i][j] = A_matrix[i][j];
-			B_Tile[i][j] = B_matrix[i][j];
+	for (int r = 0; r < strideA_; r += SASIZE) {
+		int rows = std::min(SASIZE, static_cast<int>(strideA_ - r));
+		for (int c = 0; c < strideB_; c += SASIZE) {
+			int cols = std::min(SASIZE, static_cast<int>(strideB_ - c));
+			for (int k = 0; k < strideB_; k += SASIZE) {
+				int kcols = std::min(SASIZE, static_cast<int>(strideB_ - k));
+				tileQ.push({r, c, rows, cols, k, kcols});
+			}
 		}
 	}
-	this->ComputeTile(strideA_);
+	launchNextTile();  // kick things off
+}
+
+void SystolicArray::launchNextTile() {
+	if (tileQ.empty()) {  // nothing left → whole matmul finished
+		this->done_ = true;
+		this->writeOutputs();
+		return;
+	}
+	TileTask t         = tileQ.front();
+	this->current_tile = t;
+	tileQ.pop();
+
+	//  zero Tile_Result, load A_Tile and B_Tile with the sub-blocks
+	for (int i = 0; i < SASIZE; i++) {
+		for (int j = 0; j < SASIZE; j++) { Tile_Result[i][j] = 0; }
+	}
+	LoadATile(t.rowBlk, t.kBlk, t.tileRows, t.kCols);
+	LoadBTile(t.kBlk, t.colBlk, t.kCols, t.tileCols);
+	this->ComputeTile();  // schedules the PE events for this tile
 }
 
 std::vector<std::vector<PE>> SystolicArray::Construct_PE(int Systolic_Array_Size) {
@@ -438,17 +486,17 @@ std::vector<std::vector<PE>> SystolicArray::Construct_PE(int Systolic_Array_Size
 	return pe;
 }
 
-void SystolicArray::Preload_Weight(std::vector<std::vector<PE>>& pe, int SA_Size, int cycle_cnt) {
-	int preload_row = SA_Size - 1 - cycle_cnt;
-	CLASS_INFO << "Loading : " << preload_row;
+void SystolicArray::Preload_Weight(std::vector<std::vector<PE>>& pe, int cycle_cnt) {
+	int preload_row = SASIZE - 1 - cycle_cnt;
+	// CLASS_INFO << "Loading : " << preload_row;
 
-	for (int i = SA_Size - 1; i >= 1; --i) {
-		for (int j = 0; j < SA_Size; ++j) { pe[i][j].weightReg = pe[i - 1][j].weightReg; }
+	for (int i = SASIZE - 1; i >= 1; --i) {
+		for (int j = 0; j < SASIZE; ++j) { pe[i][j].weightReg = pe[i - 1][j].weightReg; }
 	}
 
-	for (int j = 0; j < SA_Size; ++j) {
+	for (int j = 0; j < SASIZE; ++j) {
 		pe[0][j].weightReg.valid = true;
-		pe[0][j].weightReg.data  = B_Tile[SA_Size - 1 - cycle_cnt][j];
+		pe[0][j].weightReg.data  = B_Tile[SASIZE - 1 - cycle_cnt][j];
 	}
 	/*CLASS_INFO << "[PE_W_matrix]";
 	for (uint32_t i = 0; i < strideB_; ++i) {
@@ -462,13 +510,13 @@ void SystolicArray::Preload_Weight(std::vector<std::vector<PE>>& pe, int SA_Size
 }
 
 void SystolicArray::PropagateA_And_MAC(std::vector<std::vector<PE>>& pe, std::vector<std::vector<uint16_t>>& Result,
-                                       std::vector<uint16_t>& emitRow, int SA_Size, int cycle) {
+                                       std::vector<uint16_t>& emitRow, int cycle) {
 	// 1. Propagate or inject A
-	for (int i = 0; i < SA_Size; ++i) {
-		for (int j = SA_Size - 1; j >= 0; --j) {
+	for (int i = 0; i < SASIZE; ++i) {
+		for (int j = SASIZE - 1; j >= 0; --j) {
 			if (j == 0) {
 				int aCol             = cycle - i;
-				pe[i][j].inReg.valid = (aCol >= 0 && aCol < SA_Size);
+				pe[i][j].inReg.valid = (aCol >= 0 && aCol < SASIZE);
 				pe[i][j].inReg.data  = pe[i][j].inReg.valid ? A_Tile[aCol][i] : 0;
 			} else {
 				pe[i][j].inReg = pe[i][j - 1].fwdIn;
@@ -477,8 +525,8 @@ void SystolicArray::PropagateA_And_MAC(std::vector<std::vector<PE>>& pe, std::ve
 	}
 
 	// 2. MAC computation
-	for (int i = SA_Size - 1; i >= 0; --i) {
-		for (int j = 0; j < SA_Size; ++j) {
+	for (int i = SASIZE - 1; i >= 0; --i) {
+		for (int j = 0; j < SASIZE; ++j) {
 			auto& P = pe[i][j];
 			if (P.weightReg.valid && P.inReg.valid) {
 				uint16_t prod   = static_cast<uint16_t>(P.inReg.data) * static_cast<uint16_t>(P.weightReg.data);
@@ -492,47 +540,47 @@ void SystolicArray::PropagateA_And_MAC(std::vector<std::vector<PE>>& pe, std::ve
 	}
 
 	// 3. Forward stage
-	for (int i = SA_Size - 1; i >= 0; --i) {
-		for (int j = 0; j < SA_Size; ++j) {
+	for (int i = SASIZE - 1; i >= 0; --i) {
+		for (int j = 0; j < SASIZE; ++j) {
 			pe[i][j].fwdIn   = pe[i][j].inReg;
 			pe[i][j].fwdPsum = pe[i][j].psumReg;
 		}
 	}
 
-	CLASS_INFO << "[Psum_matrix]";
+	/*CLASS_INFO << "[Psum_matrix]";
 	for (uint32_t i = 0; i < strideB_; ++i) {
-		std::ostringstream row;
-		row << "W[" << i << "]: ";
-		for (uint32_t j = 0; j < strideB_; ++j) {
-			row << std::setw(3) << std::setfill(' ')
-			    << (pe[i][j].psumReg.valid ? static_cast<int>(pe[i][j].psumReg.sum) : -1) << " ";
-		}
-		CLASS_INFO << row.str();
-	}
+	    std::ostringstream row;
+	    row << "W[" << i << "]: ";
+	    for (uint32_t j = 0; j < strideB_; ++j) {
+	        row << std::setw(3) << std::setfill(' ')
+	            << (pe[i][j].psumReg.valid ? static_cast<int>(pe[i][j].psumReg.sum) : -1) << " ";
+	    }
+	    CLASS_INFO << row.str();
+	}*/
 
 	// 4. Emit valid results from bottom row
-	for (int j = 0; j < SA_Size; ++j) {
-		auto& bot = pe[SA_Size - 1][j].psumReg;
-		if (bot.valid && emitRow[j] < SA_Size) {
+	for (int j = 0; j < SASIZE; ++j) {
+		auto& bot = pe[SASIZE - 1][j].psumReg;
+		if (bot.valid && emitRow[j] < SASIZE) {
 			Result[emitRow[j]][j] = bot.sum;
 			++emitRow[j];
 			// Create bubble
-			bot.valid                        = false;
-			pe[SA_Size - 1][j].fwdPsum.valid = false;
+			bot.valid                       = false;
+			pe[SASIZE - 1][j].fwdPsum.valid = false;
 		}
 	}
 }
 
 void SystolicArray::FlushAndEmit(std::vector<std::vector<PE>>& pe, std::vector<std::vector<uint16_t>>& Result,
-                                 std::vector<uint16_t>& emitRow, int SA_Size, int cycle) {
+                                 std::vector<uint16_t>& emitRow, int cycle) {
 	// Shift fwdIn to inReg
-	for (int i = 0; i < SA_Size; ++i) {
-		for (int j = SA_Size - 1; j >= 0; --j) { pe[i][j].inReg = pe[i][j - 1].fwdIn; }
+	for (int i = 0; i < SASIZE; ++i) {
+		for (int j = SASIZE - 1; j >= 0; --j) { pe[i][j].inReg = pe[i][j - 1].fwdIn; }
 	}
 
 	// MAC compute (with no new injection)
-	for (int i = SA_Size - 1; i >= 0; --i) {
-		for (int j = 0; j < SA_Size; ++j) {
+	for (int i = SASIZE - 1; i >= 0; --i) {
+		for (int j = 0; j < SASIZE; ++j) {
 			auto& P = pe[i][j];
 			if (P.weightReg.valid && P.inReg.valid) {
 				uint16_t prod   = static_cast<uint16_t>(P.inReg.data) * static_cast<uint16_t>(P.weightReg.data);
@@ -546,83 +594,88 @@ void SystolicArray::FlushAndEmit(std::vector<std::vector<PE>>& pe, std::vector<s
 	}
 
 	// Forward values
-	for (int i = SA_Size - 1; i >= 0; --i) {
-		for (int j = 0; j < SA_Size; ++j) {
+	for (int i = SASIZE - 1; i >= 0; --i) {
+		for (int j = 0; j < SASIZE; ++j) {
 			pe[i][j].fwdIn   = pe[i][j].inReg;
 			pe[i][j].fwdPsum = pe[i][j].psumReg;
 		}
 	}
 
 	// Emit valid results
-	for (int j = 0; j < SA_Size; ++j) {
-		auto& bot = pe[SA_Size - 1][j].psumReg;
-		if (bot.valid && emitRow[j] < SA_Size) {
+	for (int j = 0; j < SASIZE; ++j) {
+		auto& bot = pe[SASIZE - 1][j].psumReg;
+		if (bot.valid && emitRow[j] < SASIZE) {
 			Result[emitRow[j]][j] = bot.sum;
 			++emitRow[j];
 			// bubble logic
-			bot.valid                        = false;
-			pe[SA_Size - 1][j].fwdPsum.valid = false;
+			bot.valid                       = false;
+			pe[SASIZE - 1][j].fwdPsum.valid = false;
 		}
 	}
 
-	if (cycle == SA_Size - 1) {
+	if (cycle == SASIZE - 1) {
 		// Write to the tile
-		for (int i = 0; i < SA_Size; i++) {
-			for (int j = 0; j < SA_Size; j++) { Tile_Result[i][j] = Result[i][j]; }
+		this->TileFinish = true;
+		for (int i = 0; i < SASIZE; i++) {
+			for (int j = 0; j < SASIZE; j++) { Tile_Result[i][j] = Result[i][j]; }
 		}
 	}
 }
 
-void SystolicArray::ComputeTile(int SA_Size) {
+void SystolicArray::ComputeTile() {
+	this->TileFinish = false;
 	/* -------- data structures ------------------------------------------------ */
-	auto pe      = std::make_shared<std::vector<std::vector<PE>>>(this->Construct_PE(SA_Size));
-	auto emitRow = std::make_shared<std::vector<uint16_t>>(SA_Size, 0);  // “where do I write next” per column
-	auto Result  = std::make_shared<std::vector<std::vector<uint16_t>>>(SA_Size, std::vector<uint16_t>(SA_Size, 0));
+	auto pe      = std::make_shared<std::vector<std::vector<PE>>>(this->Construct_PE(SASIZE));
+	auto emitRow = std::make_shared<std::vector<uint16_t>>(SASIZE, 0);  // “where do I write next” per column
+	auto Result  = std::make_shared<std::vector<std::vector<uint16_t>>>(SASIZE, std::vector<uint16_t>(SASIZE, 0));
 
 	int total_cycle_count = 0;
 	/* -------- 1.  weight preload  ---------------------------- */
-	for (total_cycle_count = 0; total_cycle_count < SA_Size; ++total_cycle_count) {
+	for (total_cycle_count = 0; total_cycle_count < SASIZE; ++total_cycle_count) {
 		// compute at which tick you want this preload to happen
 		acalsim::Tick when = acalsim::top->getGlobalTick() + 1 + total_cycle_count;
 
-		// capture pe by reference, SA_Size and cycle by value
-		auto func = [this, pe, SA_Size, total_cycle_count]() { this->Preload_Weight(*pe, SA_Size, total_cycle_count); };
+		// capture pe by reference, SASIZE and cycle by value
+		auto func = [this, pe, total_cycle_count]() { this->Preload_Weight(*pe, total_cycle_count); };
 		// create and schedule the event
 		auto* event = new acalsim::LambdaEvent<void()>(func);
 		this->scheduleEvent(event, when);
 	}
 	/* -------2.  Propogation ---------------------------------- */
-	int expected_total_cycle = total_cycle_count + SA_Size * 2 - 1;
+	int expected_total_cycle = total_cycle_count + SASIZE * 2 - 1;
 	for (int cycle = 0; total_cycle_count < expected_total_cycle; total_cycle_count++) {
 		// compute at which tick you want this preload to happen
 		acalsim::Tick when = acalsim::top->getGlobalTick() + 1 + total_cycle_count;
 
-		// capture pe by reference, SA_Size and cycle by value
-		auto func = [this, pe, Result, emitRow, SA_Size, cycle]() {
-			this->PropagateA_And_MAC(*pe, *Result, *emitRow, SA_Size, cycle);
-		};
+		// capture pe by reference, SASIZE and cycle by value
+		auto func = [this, pe, Result, emitRow, cycle]() { this->PropagateA_And_MAC(*pe, *Result, *emitRow, cycle); };
 		cycle++;
 		// create and schedule the event
 		auto* event = new acalsim::LambdaEvent<void()>(func);
 		this->scheduleEvent(event, when);
 	}
 
-	expected_total_cycle = total_cycle_count + SA_Size;
+	expected_total_cycle = total_cycle_count + SASIZE;
 	/* -------- 3.  flush phase ------------------------------------------------- */
 	for (int cyc = 0; total_cycle_count < expected_total_cycle; ++total_cycle_count) {
 		// compute at which tick you want this preload to happen
 		acalsim::Tick when = acalsim::top->getGlobalTick() + 1 + total_cycle_count;
-		auto          func = [this, pe, Result, emitRow, SA_Size, cyc]() {
-            this->FlushAndEmit(*pe, *Result, *emitRow, SA_Size, cyc);
-		};
+		auto          func = [this, pe, Result, emitRow, cyc]() { this->FlushAndEmit(*pe, *Result, *emitRow, cyc); };
 		cyc++;
 		auto* event = new acalsim::LambdaEvent<void()>(func);
 		this->scheduleEvent(event, when);
 	}
 
-	auto  func  = [this]() { this->writeOutputs(); };
-	auto* event = new acalsim::LambdaEvent<void()>(func);
-	this->scheduleEvent(event, acalsim::top->getGlobalTick() + expected_total_cycle + 2);
+	auto func = [this]() {
+		// 1) deposit Tile_Result into C_matrix
+		for (int i = 0; i < current_tile.tileRows; ++i)
+			for (int j = 0; j < current_tile.tileCols; ++j)
+				C_matrix[current_tile.rowBlk + i][current_tile.colBlk + j] += Tile_Result[i][j];
+
+		launchNextTile();  // 2) immediately kick off next tile
+	};
+	auto* e = new acalsim::LambdaEvent<void()>(func);
+	this->scheduleEvent(e, acalsim::top->getGlobalTick() + expected_total_cycle + 2);
 }
 
 void SystolicArray::writeOutputs() {
@@ -631,12 +684,10 @@ void SystolicArray::writeOutputs() {
 		std::ostringstream row;
 		row << "C[" << i << "]: ";
 		for (uint32_t j = 0; j < strideC_; ++j) {
-			C_matrix[i][j] = Tile_Result[i][j];
 			row << std::setw(3) << std::setfill(' ') << static_cast<int>(C_matrix[i][j]) << " ";
 		}
 		CLASS_INFO << row.str();
 	}
-	this->done_ = true;
 }
 
 void SystolicArray::handleWriteCompletion(XBarMemWriteRespPacket* pkt) {

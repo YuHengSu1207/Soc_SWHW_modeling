@@ -12,6 +12,7 @@
 
 #define SA_MEMORY_BASE 0x20000
 #define SA_SRAM_SIZE   8000
+#define SASIZE         16
 
 struct Valid8 {
 	bool    valid;
@@ -67,12 +68,12 @@ private:
 
 	// Core computation
 	std::vector<std::vector<PE>> Construct_PE(int Systolic_Array_Size);
-	void                         Preload_Weight(std::vector<std::vector<PE>>& pe, int SA_Size, int cycle_cnt);
+	void                         Preload_Weight(std::vector<std::vector<PE>>& pe, int cycle_cnt);
 	void PropagateA_And_MAC(std::vector<std::vector<PE>>& pe, std::vector<std::vector<uint16_t>>& Result,
-	                        std::vector<uint16_t>& emitRow, int SA_Size, int cycle);
+	                        std::vector<uint16_t>& emitRow, int cycle);
 	void FlushAndEmit(std::vector<std::vector<PE>>& pe, std::vector<std::vector<uint16_t>>& Result,
-	                  std::vector<uint16_t>& emitRow, int SA_Size, int cycle);
-	void ComputeTile(int SA_Size);
+	                  std::vector<uint16_t>& emitRow, int cycle);
+	void ComputeTile();
 
 	void ComputeMatrix();
 
@@ -95,10 +96,23 @@ private:
 	uint8_t  B_matrix[64][64];
 	uint16_t C_matrix[64][64];  // size M_ * N_
 
-	uint16_t Tile_Result[8][8];
-	uint8_t  A_Tile[8][8];
-	uint8_t  B_Tile[8][8];
+	/* Tiling Utility*/
+	struct TileTask {
+		int rowBlk, colBlk;  // where this tile of C starts
+		int tileRows, tileCols;
+		int kBlk, kCols;  // which K-slice this tile will multiply
+	};
+	std::queue<TileTask> tileQ;  // pending work
 
+	uint16_t Tile_Result[SASIZE][SASIZE];
+	uint8_t  A_Tile[SASIZE][SASIZE];
+	uint8_t  B_Tile[SASIZE][SASIZE];
+	bool     TileFinish = false;
+
+	void     LoadATile(int rowBlk, int kBlk, int tileRows, int kCols);
+	void     LoadBTile(int kBlk, int colBlk, int kCols, int tileCols);
+	void     launchNextTile();
+	TileTask current_tile;
 	/* ---------- on‑chip SRAM ---------- */
 	uint32_t sram_[SA_SRAM_SIZE]{};
 
