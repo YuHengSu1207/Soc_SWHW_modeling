@@ -5,7 +5,7 @@ get_filename_component(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR} ABSOLUTE)
 
 # Project data
 project(SOCSimulator)
-
+include(GetLibtorch.cmake)
 # Directories
 set(INC_DIR include)
 set(LIB_DIR libs)
@@ -47,10 +47,7 @@ if(NOT Threads_FOUND)
 endif(NOT Threads_FOUND)
 
 # Link Torch
-if(NOT Torch_FOUND)
-    find_package(Torch REQUIRED)
-endif(NOT Torch_FOUND)
-
+get_libtorch()
 # CMake options
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
