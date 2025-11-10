@@ -1,5 +1,7 @@
 # SOC SW HW modeling
 
+This is the hardware modeling of [The Hardware Implementation](https://github.com/YuHengSu1207/SOC_CHISEL) 
+
 ## Init & Working environment
 You can refer the working environment [here](https://github.com/twhpcedu/acal-acalsim-workspace)
 
